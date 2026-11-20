@@ -1,0 +1,10 @@
+# Packages already present on the machine this was built on.
+# The embedding model is the cached Hugging Face snapshot of
+# sentence-transformers/all-MiniLM-L6-v2, loaded with transformers.
+# Do not pip-install a new model stack unless these imports fail.
+fastapi>=0.110
+uvicorn>=0.27
+pillow>=10
+numpy>=1.26
+torch
+transformers>=4.40

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local RAG</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --ink: #1d1a16;
+      --muted: #6b645b;
+      --line: #ddd4c6;
+      --card: #fffdf8;
+      --accent: #0f6e56;
+      --accent-ink: #f4fff9;
+      --warn: #8a5a12;
+      --warn-bg: #fbf3e4;
+      --bad: #8d2f2f;
+      --bad-bg: #fdecec;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.45 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 28px 0 8px; }
+    h1 { font-size: 32px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.03em; }
+    .lede { margin: 0; color: var(--muted); max-width: 68ch; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin: 18px 0; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+    input, select, textarea, button {
+      font: inherit;
+      color: var(--ink);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    textarea { width: 100%; min-height: 78px; resize: vertical; }
+    button {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: var(--accent);
+      cursor: pointer;
+      padding: 9px 14px;
+    }
+    button.secondary { background: var(--card); color: var(--ink); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .grow { flex: 1; min-width: 240px; }
+    .layout { display: grid; grid-template-columns: 1fr 1.15fr; gap: 18px; padding-bottom: 48px; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px 16px;
+    }
+    h2 { font-size: 18px; margin: 0 0 10px; }
+    .log {
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      background: #f7f4ee;
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 140px;
+      overflow: auto;
+      color: var(--muted);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; vertical-align: top; padding: 7px 6px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .note { color: var(--warn); font-size: 12px; }
+    .modes { display: flex; gap: 8px; margin-bottom: 10px; }
+    .modes button[aria-pressed="false"] { background: var(--card); color: var(--ink); }
+    .answer {
+      white-space: pre-wrap;
+      background: #f7f4ee;
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 80px;
+    }
+    .banner { border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
+    .banner.warn { background: var(--warn-bg); color: var(--warn); }
+    .banner.bad { background: var(--bad-bg); color: var(--bad); }
+    .source { border-top: 1px solid var(--line); padding: 10px 0; }
+    .source h3 { margin: 0 0 4px; font-size: 15px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    details { margin-top: 10px; }
+    summary { cursor: pointer; color: var(--accent); }
+    pre {
+      white-space: pre-wrap;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      background: #f7f4ee;
+      padding: 8px;
+      border-radius: 8px;
+    }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Local RAG</h1>
+    <p class="lede">Index a folder of notes, PDFs, photos, and videos on this computer. Read the retrieved passages first. Call a language model only when you want one.</p>
+    <div class="row">
+      <label class="grow">Folder
+        <input id="folder" placeholder="/home/you/notes" />
+      </label>
+      <button id="index-btn">Index folder</button>
+    </div>
+    <div id="log" class="log">Waiting.</div>
+  </header>
+  <main class="layout">
+    <section>
+      <h2>Files in the index</h2>
+      <div id="files">Nothing indexed yet.</div>
+    </section>
+    <section>
+      <h2>Ask</h2>
+      <div class="modes">
+        <button id="mode-local" aria-pressed="true">Local preview</button>
+        <button id="mode-llm" class="secondary" aria-pressed="false">Language model</button>
+      </div>
+      <textarea id="question" placeholder="What did the notes say about displacement in Addis Ababa?"></textarea>
+      <div class="filters" style="margin-top:8px">
+        <label>Type
+          <select id="kind">
+            <option value="any">any</option>
+            <option value="text">text</option>
+            <option value="pdf">pdf</option>
+            <option value="docx">docx</option>
+            <option value="image">image</option>
+            <option value="video">video</option>
+          </select>
+        </label>
+        <label>Country
+          <input id="country" placeholder="Ethiopia" />
+        </label>
+        <label>Year
+          <input id="year" placeholder="2026" size="6" />
+        </label>
+        <button id="ask-btn">Search</button>
+      </div>
+      <div id="llm-settings" hidden>
+        <div class="row">
+          <label class="grow">API base
+            <input id="llm-base" value="http://127.0.0.1:11434/v1" />
+          </label>
+          <label>Model
+            <input id="llm-model" value="qwen2:0.5b" />
+          </label>
+          <label>Key
+            <input id="llm-key" type="password" placeholder="optional" />
+          </label>
+        </div>
+        <p class="meta">Sends a POST to <code>/chat/completions</code>. Ollama speaks this shape. If the server is down, the passages still show.</p>
+      </div>
+      <div id="status"></div>
+      <div id="answer" class="answer">Ask something after the folder is indexed.</div>
+      <div id="sources"></div>
+      <details>
+        <summary>Request that a language model would receive</summary>
+        <pre id="payload">Nothing yet.</pre>
+      </details>
+    </section>
+  </main>
+  <script>
+    const folder = document.querySelector("#folder");
+    const logEl = document.querySelector("#log");
+    const filesEl = document.querySelector("#files");
+    const answerEl = document.querySelector("#answer");
+    const sourcesEl = document.querySelector("#sources");
+    const payloadEl = document.querySelector("#payload");
+    const statusEl = document.querySelector("#status");
+    const indexBtn = document.querySelector("#index-btn");
+    const askBtn = document.querySelector("#ask-btn");
+    const llmSettings = document.querySelector("#llm-settings");
+    let mode = "local";
+    let poll = null;
+
+    const saved = JSON.parse(localStorage.getItem("local-rag-settings") || "{}");
+    if (saved.folder) folder.value = saved.folder;
+    if (saved.base) document.querySelector("#llm-base").value = saved.base;
+    if (saved.model) document.querySelector("#llm-model").value = saved.model;
+
+    function saveSettings() {
+      localStorage.setItem("local-rag-settings", JSON.stringify({
+        folder: folder.value,
+        base: document.querySelector("#llm-base").value,
+        model: document.querySelector("#llm-model").value,
+      }));
+    }
+
+    function setMode(next) {
+      mode = next;
+      document.querySelector("#mode-local").setAttribute("aria-pressed", String(next === "local"));
+      document.querySelector("#mode-llm").setAttribute("aria-pressed", String(next === "llm"));
+      llmSettings.hidden = next !== "llm";
+    }
+    document.querySelector("#mode-local").onclick = () => setMode("local");
+    document.querySelector("#mode-llm").onclick = () => setMode("llm");
+
+    async function loadFiles() {
+      const res = await fetch("/api/documents");
+      const data = await res.json();
+      if (!data.files.length) {
+        filesEl.textContent = "Nothing indexed yet.";
+        return;
+      }
+      const rows = data.files.map(file => `
+        <tr>
+          <td>${escapeHtml(file.name)}<div class="meta">${escapeHtml(file.kind)}${file.ocr_used ? " · OCR" : ""}</div></td>
+          <td>${escapeHtml(file.captured_at || "—")}<div class="meta">${escapeHtml(file.time_source || "")}</div></td>
+          <td>${escapeHtml(file.country || "—")}</td>
+          <td>${file.chars}${file.warning ? `<div class="note">${escapeHtml(file.warning)}</div>` : ""}</td>
+        </tr>`).join("");
+      filesEl.innerHTML = `<table><thead><tr><th>File</th><th>Time</th><th>Country</th><th>Text</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    async function pollJob() {
+      const res = await fetch("/api/job");
+      const job = await res.json();
+      logEl.textContent = (job.log || []).join("\n") || "Waiting.";
+      indexBtn.disabled = job.state === "running";
+      if (job.state === "running") return;
+      clearInterval(poll);
+      poll = null;
+      await loadFiles();
+    }
+
+    indexBtn.onclick = async () => {
+      saveSettings();
+      indexBtn.disabled = true;
+      const res = await fetch("/api/index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: folder.value }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        logEl.textContent = err.detail || "Could not start indexing.";
+        indexBtn.disabled = false;
+        return;
+      }
+      if (poll) clearInterval(poll);
+      poll = setInterval(pollJob, 800);
+      pollJob();
+    };
+
+    askBtn.onclick = async () => {
+      saveSettings();
+      askBtn.disabled = true;
+      statusEl.innerHTML = "";
+      const res = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: document.querySelector("#question").value,
+          mode,
+          kind: document.querySelector("#kind").value,
+          country: document.querySelector("#country").value,
+          year: document.querySelector("#year").value,
+          llm_base_url: document.querySelector("#llm-base").value,
+          llm_model: document.querySelector("#llm-model").value,
+          llm_api_key: document.querySelector("#llm-key").value,
+        }),
+      });
+      askBtn.disabled = false;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        answerEl.textContent = err.detail || "Query failed.";
+        return;
+      }
+      const data = await res.json();
+      if (data.llm_error) {
+        statusEl.innerHTML = `<div class="banner bad">The model was not called successfully. Showing the local passages instead.<br>${escapeHtml(data.llm_error)}</div>`;
+      } else if (mode === "local") {
+        statusEl.innerHTML = `<div class="banner warn">Local preview. The model request is below, unsent.</div>`;
+      }
+      answerEl.textContent = data.answer || "";
+      sourcesEl.innerHTML = (data.sources || []).map((hit, i) => `
+        <article class="source">
+          <h3>[${i + 1}] ${escapeHtml(hit.path.split("/").pop())}</h3>
+          <div class="meta">${escapeHtml(hit.kind)} · ${escapeHtml(hit.captured_at || "time unknown")} · ${escapeHtml(hit.country || "country unknown")} · score ${hit.score.toFixed(2)}</div>
+          <p>${escapeHtml(hit.text.slice(0, 700))}</p>
+        </article>`).join("");
+      payloadEl.textContent = JSON.stringify(data.llm_request, null, 2);
+    };
+
+    loadFiles();
+    pollJob();
+  </script>
+</body>
+</html>
