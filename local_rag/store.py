@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from local_rag.embedder import MODEL_ID
+from local_rag.settings import MODEL_ID
 
 INDEX_PATH = Path(__file__).resolve().parents[1] / "data" / "index.sqlite"
 

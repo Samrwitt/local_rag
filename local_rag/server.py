@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from local_rag.answer import call_llm, llm_request_body, local_preview, retrieve
-from local_rag.embedder import MODEL_ID
+from local_rag.settings import MODEL_ID
 from local_rag.pipeline import index_folder
 from local_rag import store
 
@@ -41,7 +41,7 @@ class QueryRequest(BaseModel):
     country: str | None = None
     year: str | None = None
     llm_base_url: str = "http://127.0.0.1:11434/v1"
-    llm_model: str = "qwen2:0.5b"
+    llm_model: str = "qwen2.5:1.5b"
     llm_api_key: str = ""
 
 

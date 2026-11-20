@@ -17,6 +17,18 @@ def normalize(text: str) -> str:
     return text.strip()
 
 
+def _word_start(text: str, index: int) -> int:
+    """Move an index back to the start of the word it landed inside."""
+    if index <= 0 or index >= len(text):
+        return index
+    if text[index - 1].isspace():
+        return index
+    space = text.rfind(" ", max(0, index - 80), index)
+    if space == -1:
+        return index
+    return space + 1
+
+
 def chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
     text = normalize(text)
     if not text:
@@ -31,15 +43,21 @@ def chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
                 current = ""
             start = 0
             while start < len(para):
-                chunks.append(para[start : start + size].strip())
-                if start + size >= len(para):
+                end = min(len(para), start + size)
+                if end < len(para):
+                    end = _word_start(para, end)
+                    if end <= start:
+                        end = min(len(para), start + size)
+                chunks.append(para[start:end].strip())
+                if end >= len(para):
                     break
-                start += size - overlap
+                start = _word_start(para, max(start + 1, end - overlap))
             continue
         candidate = f"{current}\n\n{para}".strip() if current else para
         if current and len(candidate) > size:
             chunks.append(current)
-            tail = current[-overlap:].strip()
+            cut = _word_start(current, max(0, len(current) - overlap))
+            tail = current[cut:].strip()
             current = f"{tail}\n\n{para}".strip()
         else:
             current = candidate

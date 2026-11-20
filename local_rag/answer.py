@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from urllib import error, request
 
-from local_rag.embedder import embed_query
 from local_rag import store
 
 SYSTEM_PROMPT = (
@@ -43,6 +42,8 @@ def llm_request_body(question: str, hits: list[dict], model: str) -> dict:
 
 
 def retrieve(question: str, k: int = 5, kind: str | None = None, country: str | None = None, year: str | None = None) -> list[dict]:
+    from local_rag.embedder import embed_query
+
     vector = embed_query(question)
     return store.search(question, vector, k=k, kind=kind or None, country=country or None, year=year or None)
 

@@ -8,11 +8,13 @@ from pathlib import Path
 import numpy as np
 
 from local_rag.chunking import chunk_text, metadata_card, normalize
-from local_rag.embedder import MODEL_ID, embed_texts
 from local_rag.extract import extract, kind_for
+from local_rag.settings import MODEL_ID
 from local_rag import store
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache"}
+# Bump when extraction changes, so unchanged files are read again.
+EXTRACTOR_REV = "3"
 MAX_FILE_BYTES = 80 * 1024 * 1024
 MAX_CHUNKS = 40
 
@@ -42,7 +44,7 @@ def crawl(root: Path, max_files: int = 400) -> list[Path]:
 
 def fingerprint(path: Path) -> str:
     stat = path.stat()
-    return f"{stat.st_size}:{stat.st_mtime_ns}:{MODEL_ID}"
+    return f"{stat.st_size}:{stat.st_mtime_ns}:{MODEL_ID}:{EXTRACTOR_REV}"
 
 
 def index_folder(root: Path | str, max_files: int = 400, on_event=None) -> dict:
@@ -105,6 +107,8 @@ def _index_one(path: Path, fp: str) -> None:
         content_chunks = content_chunks[: MAX_CHUNKS - 1]
         truncated = True
     pieces.extend(content_chunks)
+    from local_rag.embedder import embed_texts
+
     vectors = embed_texts(pieces)
     chunk_rows = []
     for ordinal, (text, vector) in enumerate(zip(pieces, vectors)):

@@ -7,13 +7,23 @@ That is the same pooling MiniLM was trained with.
 
 from __future__ import annotations
 
+import os
 import threading
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
+from transformers.utils import logging as transformers_logging
 
-MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+transformers_logging.set_verbosity_error()
+transformers_logging.disable_progress_bar()
+
+from local_rag.settings import MODEL_ID
 
 _lock = threading.Lock()
 _tokenizer = None

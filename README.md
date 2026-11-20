@@ -53,7 +53,7 @@ Authorization: Bearer <key>     # omitted when the key is empty
 
 ```json
 {
-  "model": "qwen2:0.5b",
+  "model": "qwen2.5:1.5b",
   "temperature": 0.2,
   "messages": [
     {"role": "system", "content": "Use only the numbered sources..."},
@@ -62,7 +62,7 @@ Authorization: Bearer <key>     # omitted when the key is empty
 }
 ```
 
-Ollama's default base is `http://127.0.0.1:11434/v1`. A hosted provider uses the same body with its own base URL, model name, and key. The key stays in the browser (`localStorage`) and is not written into the index.
+Ollama's default base is `http://127.0.0.1:11434/v1`. The default model is `qwen2.5:1.5b`. A hosted provider uses the same body with its own base URL, model name, and key. The key stays in the browser (`localStorage`) and is not written into the index.
 
 If the call fails, the answer falls back to the same passages the local preview would have shown.
 

@@ -321,6 +321,7 @@ def _image_exif(path: Path) -> tuple[float | None, float | None, str | None, str
         parsed = _parse_exif_datetime(exif.get(306))
         if parsed:
             captured, source = parsed, "exif"
+    captured = _with_offset(captured, sub)
     gps = exif.get_ifd(34853) if hasattr(exif, "get_ifd") else {}
     lat, lon = _gps_lat_lon(gps)
     if captured is None and gps:
@@ -360,6 +361,21 @@ def _ratio(value) -> float:
 def _dms_to_deg(value) -> float:
     degrees, minutes, seconds = value
     return _ratio(degrees) + _ratio(minutes) / 60 + _ratio(seconds) / 3600
+
+
+def _with_offset(captured: str | None, sub: dict | None) -> str | None:
+    """Keep the camera's timezone when EXIF recorded one.
+
+    DateTimeOriginal is local camera time. OffsetTimeOriginal says how far
+    that clock was from UTC. GPS time is usually UTC, so the two disagree
+    by exactly that offset when both exist.
+    """
+    if not captured or not sub:
+        return captured
+    offset = sub.get(36881) or sub.get(36882) or sub.get(36880)
+    if isinstance(offset, str) and re.fullmatch(r"[+-]\d{2}:\d{2}", offset.strip()):
+        return captured + offset.strip()
+    return captured
 
 
 def _parse_exif_datetime(raw) -> str | None:
