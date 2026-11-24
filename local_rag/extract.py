@@ -1,8 +1,11 @@
-"""Turn one file into plain text plus time and place signals.
+"""Turn one file into text plus interpreted time and place signals.
 
 Text comes from the file itself when it has a text layer. Photos and
-videos go through Tesseract (English). Country comes only from GPS,
-never from words in the text.
+scanned PDFs go through Tesseract. OCR is interpreted into city, country,
+language, and trip roles — not stored as raw OCR alone.
+
+Videos are not opened frame-by-frame. Only container metadata (headers/tags)
+is decoded into searchable trip data.
 """
 
 from __future__ import annotations
@@ -20,9 +23,9 @@ from xml.etree import ElementTree as ET
 from PIL import Image
 
 from local_rag.geo import country_at
+from local_rag.place import interpret_place
 
 TEXT_EXT = {".txt", ".md", ".markdown", ".csv", ".json", ".html", ".htm", ".rst", ".log"}
-DOC_EXT = {".pdf", ".docx"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
 
@@ -37,10 +40,16 @@ class Extracted:
     captured_at: str | None = None
     time_source: str | None = None
     country: str | None = None
+    city: str | None = None
+    language: str | None = None
+    roles: list[str] = field(default_factory=list)
+    venues: list[str] = field(default_factory=list)
+    place_source: str | None = None
     lat: float | None = None
     lon: float | None = None
     warnings: list[str] = field(default_factory=list)
     ocr_used: bool = False
+    interpreted: str = ""
 
 
 def kind_for(path: Path) -> str | None:
@@ -63,14 +72,50 @@ def extract(path: Path) -> Extracted:
     if kind is None:
         return Extracted(kind="skipped", warnings=["unsupported type"])
     if kind == "text":
-        return _extract_text(path)
-    if kind == "pdf":
-        return _extract_pdf(path)
-    if kind == "docx":
-        return _extract_docx(path)
-    if kind == "image":
-        return _extract_image(path)
-    return _extract_video(path)
+        result = _extract_text(path)
+    elif kind == "pdf":
+        result = _extract_pdf(path)
+    elif kind == "docx":
+        result = _extract_docx(path)
+    elif kind == "image":
+        result = _extract_image(path)
+    else:
+        result = _extract_video(path)
+    return _apply_place(result, path.name)
+
+
+def _apply_place(result: Extracted, name: str) -> Extracted:
+    place = interpret_place(
+        result.text,
+        path_name=name,
+        gps_country=result.country,
+    )
+    if place.country:
+        result.country = place.country
+    result.city = place.city
+    result.language = place.language
+    result.roles = place.roles
+    result.venues = place.venues
+    result.place_source = place.place_source
+    result.interpreted = "\n".join(place.summary_lines)
+    return result
+
+
+def _date_from_text(text: str) -> tuple[str | None, str | None]:
+    match = re.search(r"\b((?:19|20)\d{2})[-/.](\d{2})[-/.](\d{2})\b", text or "")
+    if match:
+        year, month, day = (int(part) for part in match.groups())
+        try:
+            return datetime(year, month, day).isoformat(timespec="seconds"), "document"
+        except ValueError:
+            pass
+    year_only = re.search(r"\b((?:19|20)\d{2})\b", text or "")
+    if year_only:
+        try:
+            return datetime(int(year_only.group(1)), 1, 1).isoformat(timespec="seconds"), "document"
+        except ValueError:
+            return None, None
+    return None, None
 
 
 def _extract_text(path: Path) -> Extracted:
@@ -84,6 +129,9 @@ def _extract_text(path: Path) -> Extracted:
     if len(raw) > MAX_TEXT_CHARS:
         warnings.append(f"text truncated to {MAX_TEXT_CHARS} characters")
     captured, source = _time_from_name(path.name)
+    body_date, body_source = _date_from_text(text)
+    if body_date:
+        captured, source = body_date, body_source
     if captured is None:
         captured, source = _time_from_mtime(path)
     return Extracted(
@@ -119,7 +167,9 @@ def _extract_docx(path: Path) -> Extracted:
     text = "\n\n".join(paragraphs)[:MAX_TEXT_CHARS]
     if not text:
         warnings.append("docx had no text")
-    captured, source = _time_from_mtime(path)
+    captured, source = _date_from_text(text)
+    if captured is None:
+        captured, source = _time_from_mtime(path)
     return Extracted(
         kind="docx",
         text=text,
@@ -131,9 +181,6 @@ def _extract_docx(path: Path) -> Extracted:
 
 def _extract_pdf(path: Path) -> Extracted:
     warnings = []
-    captured, source = _pdf_creation_time(path)
-    if captured is None:
-        captured, source = _time_from_mtime(path)
     try:
         proc = subprocess.run(
             ["pdftotext", "-layout", str(path), "-"],
@@ -148,7 +195,6 @@ def _extract_pdf(path: Path) -> Extracted:
     text = (proc.stdout if proc else "") or ""
     text = text.strip()
     ocr_used = False
-    # A scanned page returns almost nothing. Rasterize a few pages and OCR them.
     if len(re.sub(r"\s+", "", text)) < 40:
         ocr_text, ocr_warning = _ocr_pdf_pages(path)
         if ocr_warning:
@@ -159,6 +205,11 @@ def _extract_pdf(path: Path) -> Extracted:
             warnings.append("pdf had no text layer; used OCR")
         elif not text:
             warnings.append("pdf produced no text")
+    captured, source = _date_from_text(text)
+    if captured is None:
+        captured, source = _pdf_creation_time(path)
+    if captured is None:
+        captured, source = _time_from_mtime(path)
     return Extracted(
         kind="pdf",
         text=text[:MAX_TEXT_CHARS],
@@ -190,7 +241,6 @@ def _pdf_creation_time(path: Path) -> tuple[str | None, str | None]:
 
 
 def _parse_pdf_date(raw: str) -> str | None:
-    # pdfinfo: "Sun Nov 23 12:27:08 2025 EAT"
     head = raw[:24].strip()
     for fmt in ("%a %b %d %H:%M:%S %Y", "%Y-%m-%dT%H:%M:%S"):
         try:
@@ -262,7 +312,7 @@ def _extract_image(path: Path) -> Extracted:
     captured = source = None
     try:
         lat, lon, captured, source = _image_exif(path)
-    except Exception as exc:  # a bad image should not stop the crawl
+    except Exception as exc:
         warnings.append(f"exif unreadable: {exc}")
     country = None
     if lat is not None and lon is not None:
@@ -273,7 +323,7 @@ def _extract_image(path: Path) -> Extracted:
         if country is None:
             warnings.append("GPS point did not fall inside a country polygon")
     else:
-        warnings.append("no GPS latitude/longitude (country left blank)")
+        warnings.append("no GPS; place may still come from OCR text")
     if captured is None:
         captured, source = _time_from_name(path.name)
     if captured is None:
@@ -311,7 +361,7 @@ def _image_exif(path: Path) -> tuple[float | None, float | None, str | None, str
     captured = None
     source = None
     sub = exif.get_ifd(34665) if hasattr(exif, "get_ifd") else {}
-    for key in (36867, 36868):  # DateTimeOriginal, DateTimeDigitized
+    for key in (36867, 36868):
         raw = sub.get(key) if sub else None
         parsed = _parse_exif_datetime(raw)
         if parsed:
@@ -364,12 +414,6 @@ def _dms_to_deg(value) -> float:
 
 
 def _with_offset(captured: str | None, sub: dict | None) -> str | None:
-    """Keep the camera's timezone when EXIF recorded one.
-
-    DateTimeOriginal is local camera time. OffsetTimeOriginal says how far
-    that clock was from UTC. GPS time is usually UTC, so the two disagree
-    by exactly that offset when both exist.
-    """
     if not captured or not sub:
         return captured
     offset = sub.get(36881) or sub.get(36882) or sub.get(36880)
@@ -391,8 +435,8 @@ def _parse_exif_datetime(raw) -> str | None:
 
 
 def _gps_datetime(gps: dict) -> str | None:
-    date_raw = gps.get(29)  # GPSDateStamp
-    time_raw = gps.get(7)  # GPSTimeStamp
+    date_raw = gps.get(29)
+    time_raw = gps.get(7)
     if not isinstance(date_raw, str):
         return None
     try:
@@ -406,53 +450,64 @@ def _gps_datetime(gps: dict) -> str | None:
 
 
 def _extract_video(path: Path) -> Extracted:
+    """Decode container metadata only. Do not open or OCR video frames."""
     warnings = []
     meta = _ffprobe(path)
-    captured = None
-    source = None
-    if meta.get("creation_time"):
+    # A year in the file name (Italy_2019.mp4) beats a later container clock.
+    captured, source = _time_from_name(path.name)
+    if captured is None and meta.get("creation_time"):
         captured = _parse_iso_loose(meta["creation_time"])
         source = "container" if captured else None
     if captured is None:
-        captured, source = _time_from_name(path.name)
-    if captured is None:
         captured, source = _time_from_mtime(path)
-    duration = meta.get("duration")
-    ocr_parts = []
-    frame_notes = []
-    with tempfile.TemporaryDirectory(prefix="localrag-video-") as tmp:
-        timestamps = _frame_times(duration)
-        for index, seconds in enumerate(timestamps):
-            frame = Path(tmp) / f"frame-{index}.jpg"
-            ok, err = _grab_frame(path, seconds, frame)
-            if not ok:
-                frame_notes.append(err or f"frame at {seconds:.1f}s failed")
-                continue
-            text, ocr_warning = _tesseract(frame)
-            if ocr_warning:
-                warnings.append(ocr_warning)
-                break
-            kept = _usable_ocr(text)
-            if kept:
-                ocr_parts.append(f"[frame {seconds:.1f}s]\n{kept}")
-    if not ocr_parts:
-        warnings.append("no readable on-screen text in sampled frames")
-    if frame_notes and not ocr_parts:
-        warnings.append(frame_notes[0])
-    header = []
-    if duration:
-        header.append(f"Duration: {duration:.1f} seconds.")
-    header.append("Speech was not transcribed. Only sampled frames were read.")
-    text = "\n".join(header)
-    if ocr_parts:
-        text = text + "\n\n" + "\n\n".join(ocr_parts)
+
+    lines = [
+        f"File: {path.name}",
+        "Type: video",
+        "Source: container metadata only (no frame reading, no speech).",
+    ]
+    if meta.get("duration") is not None:
+        lines.append(f"Duration: {meta['duration']:.1f} seconds")
+    if meta.get("format_name"):
+        lines.append(f"Container: {meta['format_name']}")
+    if meta.get("title"):
+        lines.append(f"Title: {meta['title']}")
+    if meta.get("comment"):
+        lines.append(f"Comment: {meta['comment']}")
+    if meta.get("location"):
+        lines.append(f"Location tag: {meta['location']}")
+    if meta.get("artist"):
+        lines.append(f"Artist: {meta['artist']}")
+    if meta.get("album"):
+        lines.append(f"Album: {meta['album']}")
+    if meta.get("description"):
+        lines.append(f"Description: {meta['description']}")
+    if meta.get("creation_time"):
+        lines.append(f"Creation time tag: {meta['creation_time']}")
+    # Path and tag words feed place interpretation (e.g. Italy_2019.mp4).
+    lines.append(f"Path name: {path.name}")
+    if not any(meta.get(key) for key in ("title", "comment", "location", "description")):
+        warnings.append("video had few descriptive tags; place may come from the file name or date")
+
+    country = None
+    lat = lon = None
+    if meta.get("lat") is not None and meta.get("lon") is not None:
+        lat, lon = meta["lat"], meta["lon"]
+        try:
+            country = country_at(lat, lon)
+        except FileNotFoundError as exc:
+            warnings.append(str(exc))
+
     return Extracted(
         kind="video",
-        text=text[:MAX_TEXT_CHARS],
+        text="\n".join(lines)[:MAX_TEXT_CHARS],
         captured_at=captured,
         time_source=source,
+        country=country,
+        lat=lat,
+        lon=lon,
         warnings=warnings,
-        ocr_used=bool(ocr_parts),
+        ocr_used=False,
     )
 
 
@@ -464,7 +519,8 @@ def _ffprobe(path: Path) -> dict:
                 "-v",
                 "error",
                 "-show_entries",
-                "format=duration:format_tags=creation_time",
+                "format=duration,format_name:format_tags="
+                "creation_time,title,comment,description,location,artist,album,com.apple.quicktime.location.ISO6709",
                 "-of",
                 "json",
                 str(path),
@@ -481,50 +537,40 @@ def _ffprobe(path: Path) -> dict:
     except json.JSONDecodeError:
         return {}
     fmt = payload.get("format") or {}
-    tags = fmt.get("tags") or {}
+    tags = {str(k).lower(): v for k, v in (fmt.get("tags") or {}).items()}
     duration = None
     if fmt.get("duration"):
         try:
             duration = float(fmt["duration"])
         except (TypeError, ValueError):
             duration = None
-    return {"duration": duration, "creation_time": tags.get("creation_time")}
-
-
-def _frame_times(duration: float | None) -> list[float]:
-    if not duration or duration < 0.5:
-        return [0.0]
-    if duration < 3:
-        return [duration / 2]
-    return [duration * 0.15, duration * 0.5, duration * 0.85]
-
-
-def _grab_frame(path: Path, seconds: float, dest: Path) -> tuple[bool, str | None]:
-    try:
-        proc = subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-ss",
-                f"{seconds:.3f}",
-                "-i",
-                str(path),
-                "-frames:v",
-                "1",
-                "-vf",
-                "scale=1280:-1",
-                str(dest),
-            ],
-            capture_output=True,
-            timeout=40,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        return False, str(exc)
-    if proc.returncode != 0 or not dest.exists():
-        tail = (proc.stderr or b"")[-200:].decode("utf-8", "ignore")
-        return False, tail.strip() or "ffmpeg produced no frame"
-    return True, None
+    location = (
+        tags.get("location")
+        or tags.get("com.apple.quicktime.location.iso6709")
+        or tags.get("location-eng")
+    )
+    lat = lon = None
+    if location:
+        match = re.search(r"([+-]\d+\.?\d*)([+-]\d+\.?\d*)", str(location))
+        if match:
+            try:
+                lat = float(match.group(1))
+                lon = float(match.group(2))
+            except ValueError:
+                lat = lon = None
+    return {
+        "duration": duration,
+        "format_name": fmt.get("format_name"),
+        "creation_time": tags.get("creation_time"),
+        "title": tags.get("title"),
+        "comment": tags.get("comment"),
+        "description": tags.get("description"),
+        "location": location,
+        "artist": tags.get("artist"),
+        "album": tags.get("album"),
+        "lat": lat,
+        "lon": lon,
+    }
 
 
 def _tesseract(path: Path) -> tuple[str, str | None]:
@@ -547,13 +593,11 @@ def _tesseract(path: Path) -> tuple[str, str | None]:
 
 
 def _usable_ocr(text: str) -> str | None:
-    """Keep OCR only when it contains real words, not chart noise."""
     cleaned = re.sub(r"[^\S\n]+", " ", text or "")
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     words = re.findall(r"[A-Za-z]{3,}", cleaned)
     if len(words) < 5:
         return None
-    # Mostly single-character junk still produces a few accidental words.
     letters = re.findall(r"[A-Za-z]", cleaned)
     if not letters or len(words) * 4 < len(letters) / 2:
         return None
@@ -566,14 +610,21 @@ def _time_from_mtime(path: Path) -> tuple[str, str]:
 
 
 def _time_from_name(name: str) -> tuple[str | None, str | None]:
-    match = re.search(r"(20\d{2})[-_.](\d{2})[-_.](\d{2})", name)
-    if not match:
-        return None, None
-    year, month, day = (int(part) for part in match.groups())
-    try:
-        return datetime(year, month, day).isoformat(timespec="seconds"), "filename"
-    except ValueError:
-        return None, None
+    match = re.search(r"(20\d{2}|19\d{2})[-_.](\d{2})[-_.](\d{2})", name)
+    if match:
+        year, month, day = (int(part) for part in match.groups())
+        try:
+            return datetime(year, month, day).isoformat(timespec="seconds"), "filename"
+        except ValueError:
+            pass
+    # Prefer a year in the file name over a later container rewrite when present.
+    year_only = re.search(r"(?:^|[_\W])((?:19|20)\d{2})(?:[_\W]|$)", name)
+    if year_only:
+        try:
+            return datetime(int(year_only.group(1)), 1, 1).isoformat(timespec="seconds"), "filename"
+        except ValueError:
+            return None, None
+    return None, None
 
 
 def _parse_iso_loose(raw: str) -> str | None:

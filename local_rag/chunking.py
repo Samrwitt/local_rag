@@ -18,7 +18,6 @@ def normalize(text: str) -> str:
 
 
 def _word_start(text: str, index: int) -> int:
-    """Move an index back to the start of the word it landed inside."""
     if index <= 0 or index >= len(text):
         return index
     if text[index - 1].isspace():
@@ -66,16 +65,48 @@ def chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
     return [chunk for chunk in chunks if chunk.strip()]
 
 
-def metadata_card(path_name: str, kind: str, captured_at: str | None, time_source: str | None, country: str | None, lat: float | None, lon: float | None) -> str:
+def metadata_card(
+    path_name: str,
+    kind: str,
+    captured_at: str | None,
+    time_source: str | None,
+    country: str | None,
+    city: str | None,
+    language: str | None,
+    roles: list[str] | None,
+    venues: list[str] | None,
+    lat: float | None,
+    lon: float | None,
+    interpreted: str = "",
+) -> str:
+    """Searchable card so trip queries find photos, videos, receipts, bookings."""
+    year = (captured_at or "")[:4] if captured_at and len(captured_at) >= 4 else None
     lines = [f"File: {path_name}", f"Type: {kind}"]
     if captured_at:
         lines.append(f"Time: {captured_at} (from {time_source})")
+        if year and year.isdigit():
+            lines.append(f"Year: {year}")
     else:
         lines.append("Time: unknown")
     if country:
         lines.append(f"Country: {country}")
     else:
         lines.append("Country: unknown")
+    if city:
+        lines.append(f"City: {city}")
+    if language:
+        lines.append(f"Language: {language}")
+    if venues:
+        lines.append("Venues: " + ", ".join(venues))
+    if roles:
+        lines.append("Roles: " + ", ".join(roles))
     if lat is not None and lon is not None:
         lines.append(f"Coordinates: {lat:.5f}, {lon:.5f}")
+    if interpreted:
+        lines.append("Interpreted place:")
+        lines.append(interpreted)
+    # Only hint trips when place came from a real signal and year is known.
+    # Do not inject generic "hotel booking memo" words — that pollutes search.
+    if country and year and roles:
+        lines.append(f"Trip hint: {country} {year}")
     return "\n".join(lines)

@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 from urllib import error, request
 
+from local_rag.place import parse_trip_query
 from local_rag import store
 
 SYSTEM_PROMPT = (
-    "You answer questions about the user's own files. "
+    "You answer questions about the user's own files — photos, videos, receipts, "
+    "hotel info, bookings, and memos. "
     "Use only the numbered sources. Cite the source number like [1]. "
     "If the sources do not contain the answer, say that you cannot tell from these files. "
     "Do not invent countries, dates, or events."
@@ -22,7 +24,14 @@ def build_messages(question: str, hits: list[dict]) -> list[dict]:
         name = Path(hit["path"]).name
         when = hit.get("captured_at") or "time unknown"
         country = hit.get("country") or "country unknown"
-        blocks.append(f"[{index}] {name} | {hit['kind']} | {when} | {country}\n{hit['text'][:1200]}")
+        city = hit.get("city") or ""
+        place = f"{city}, {country}" if city else country
+        roles = hit.get("roles") or ""
+        blocks.append(
+            f"[{index}] {name} | {hit['kind']} | {when} | {place}"
+            + (f" | roles: {roles}" if roles else "")
+            + f"\n{hit['text'][:1200]}"
+        )
     sources = "\n\n".join(blocks) if blocks else "(no sources retrieved)"
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -41,30 +50,43 @@ def llm_request_body(question: str, hits: list[dict], model: str) -> dict:
     }
 
 
-def retrieve(question: str, k: int = 5, kind: str | None = None, country: str | None = None, year: str | None = None) -> list[dict]:
+def retrieve(
+    question: str,
+    k: int = 8,
+    kind: str | None = None,
+    country: str | None = None,
+    year: str | None = None,
+    city: str | None = None,
+) -> list[dict]:
     from local_rag.embedder import embed_query
 
+    hints = parse_trip_query(question)
     vector = embed_query(question)
-    return store.search(question, vector, k=k, kind=kind or None, country=country or None, year=year or None)
+    return store.search(
+        question,
+        vector,
+        k=k,
+        kind=kind or None,
+        country=country or None,
+        year=year or None,
+        city=city or None,
+        trip_hints=hints,
+    )
 
 
 def local_preview(question: str, hits: list[dict]) -> str:
     if not hits:
-        return "Nothing in the index matched. The folder may not contain this, or the filters hid it."
-    best = hits[0]["score"]
-    lines = [
-        "No language model was called. These are the closest passages from your files.",
-    ]
-    if best < 0.35:
-        lines.append("The best score is low. Treat this as a weak match.")
-    lines.append("")
+        return "No matches."
+    lines = []
     for index, hit in enumerate(hits, start=1):
         name = Path(hit["path"]).name
-        when = hit.get("captured_at") or "time unknown"
-        country = hit.get("country") or "country unknown"
-        lines.append(
-            f"[{index}] {name} · {hit['kind']} · {when} · {country} · score {hit['score']:.2f}"
-        )
+        when = hit.get("captured_at") or "—"
+        country = hit.get("country") or "—"
+        city = hit.get("city")
+        place = f"{city}, {country}" if city else country
+        roles = hit.get("roles")
+        extra = f" · {roles}" if roles else ""
+        lines.append(f"{index}. {name} · {hit['kind']} · {when} · {place}{extra} · {hit['score']:.2f}")
         lines.append(hit["text"][:900].strip())
         lines.append("")
     return "\n".join(lines).strip()

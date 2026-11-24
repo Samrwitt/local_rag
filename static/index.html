@@ -3,197 +3,522 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local RAG</title>
+  <title>files</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #f3efe6;
-      --ink: #1d1a16;
-      --muted: #6b645b;
-      --line: #ddd4c6;
-      --card: #fffdf8;
-      --accent: #0f6e56;
-      --accent-ink: #f4fff9;
-      --warn: #8a5a12;
-      --warn-bg: #fbf3e4;
-      --bad: #8d2f2f;
-      --bad-bg: #fdecec;
+      --paper: #eef1ec;
+      --ink: #24302a;
+      --quiet: #5d6b63;
+      --line: #cfd7d1;
+      --field: #f7f9f6;
+      --chip: #dfe8e2;
+      --go: #2f6f57;
+      --go-ink: #f4fff8;
+      --bad: #8a3b32;
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font: 16px/1.45 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      min-height: 100vh;
       color: var(--ink);
-      background: var(--bg);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #dfe8e1 0%, transparent 55%),
+        linear-gradient(180deg, #f4f6f2 0%, var(--paper) 40%, #e8ebe5 100%);
+      font: 15px/1.5 "IBM Plex Sans", "Segoe UI", sans-serif;
     }
-    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
-    header { padding: 28px 0 8px; }
-    h1 { font-size: 32px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.03em; }
-    .lede { margin: 0; color: var(--muted); max-width: 68ch; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin: 18px 0; }
-    label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-    input, select, textarea, button {
+
+    .page {
+      width: min(920px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 64px;
+    }
+
+    header {
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      color: var(--go);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 36px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+    }
+
+    header p {
+      margin: 0;
+      max-width: 38rem;
+      color: var(--quiet);
+    }
+
+    .block { margin-bottom: 28px; }
+
+    .block > h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .hint {
+      margin: -4px 0 12px;
+      color: var(--quiet);
+      font-size: 13px;
+    }
+
+    label.field {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--quiet);
+    }
+
+    input[type="text"],
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--field);
+      color: var(--ink);
+      border-radius: 4px;
+      padding: 9px 11px;
       font: inherit;
-      color: var(--ink);
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 10px;
     }
-    textarea { width: 100%; min-height: 78px; resize: vertical; }
+
+    textarea.paths {
+      min-height: 132px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      resize: vertical;
+    }
+
+    textarea.question {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: 2px solid color-mix(in srgb, var(--go) 35%, white);
+      border-color: var(--go);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .row.spread {
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .grow { flex: 1; min-width: 180px; }
+
     button {
-      background: var(--accent);
-      color: var(--accent-ink);
-      border-color: var(--accent);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 500;
       cursor: pointer;
-      padding: 9px 14px;
     }
-    button.secondary { background: var(--card); color: var(--ink); }
-    button:disabled { opacity: 0.55; cursor: wait; }
-    .grow { flex: 1; min-width: 240px; }
-    .layout { display: grid; grid-template-columns: 1fr 1.15fr; gap: 18px; padding-bottom: 48px; }
-    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
-    section {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 14px 16px 16px;
+
+    button.primary {
+      background: var(--go);
+      color: var(--go-ink);
     }
-    h2 { font-size: 18px; margin: 0 0 10px; }
+
+    button.quiet {
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    button[aria-pressed="true"] {
+      background: var(--chip);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+
     .log {
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 12px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-left: 3px solid var(--chip);
+      color: var(--quiet);
+      font: 12px/1.45 "IBM Plex Mono", ui-monospace, monospace;
       white-space: pre-wrap;
-      background: #f7f4ee;
-      border-radius: 8px;
-      padding: 8px;
-      max-height: 140px;
+      max-height: 110px;
       overflow: auto;
-      color: var(--muted);
     }
-    .file {
-      padding: 8px 0;
+
+    .split {
+      display: grid;
+      grid-template-columns: 0.95fr 1.15fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    @media (max-width: 800px) {
+      .split { grid-template-columns: 1fr; gap: 22px; }
+    }
+
+    .list {
       border-top: 1px solid var(--line);
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 14px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .item .name {
+      font-weight: 500;
       overflow-wrap: anywhere;
     }
-    .file strong { font-weight: 600; }
-    .note { color: var(--warn); font-size: 13px; margin-top: 2px; }
-    .modes { display: flex; gap: 8px; margin-bottom: 10px; }
-    .modes button[aria-pressed="false"] { background: var(--card); color: var(--ink); }
-    .answer {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      background: #f7f4ee;
-      border-radius: 8px;
-      padding: 12px;
-      min-height: 80px;
-    }
-    .banner { border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
-    .banner.warn { background: var(--warn-bg); color: var(--warn); }
-    .banner.bad { background: var(--bad-bg); color: var(--bad); }
-    .source { border-top: 1px solid var(--line); padding: 10px 0; }
-    .source h3 { margin: 0 0 4px; font-size: 15px; }
-    .meta { color: var(--muted); font-size: 13px; }
-    details { margin-top: 10px; }
-    summary { cursor: pointer; color: var(--accent); }
-    pre {
-      white-space: pre-wrap;
-      font-family: ui-monospace, monospace;
+
+    .item .when {
+      color: var(--quiet);
       font-size: 12px;
-      background: #f7f4ee;
-      padding: 8px;
-      border-radius: 8px;
+      white-space: nowrap;
+      text-align: right;
     }
-    .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .item .meta {
+      grid-column: 1 / -1;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .empty {
+      color: var(--quiet);
+      padding: 8px 0;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      align-items: end;
+    }
+
+    .filters label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--quiet);
+      min-width: 88px;
+    }
+
+    .filters label.year { min-width: 70px; }
+
+    .answer {
+      margin-top: 8px;
+      padding: 12px 0 4px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border-top: 1px solid var(--line);
+    }
+
+    .banner {
+      margin: 8px 0;
+      color: var(--bad);
+      font-size: 13px;
+    }
+
+    .hit {
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .hit h3 {
+      margin: 0 0 3px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .hit .meta {
+      color: var(--quiet);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .hit p {
+      margin: 0;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    details {
+      margin-top: 14px;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--quiet);
+      font-size: 13px;
+    }
+
+    pre {
+      margin: 8px 0 0;
+      padding: 10px;
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: 11px/1.45 "IBM Plex Mono", ui-monospace, monospace;
+      color: var(--quiet);
+    }
+
+    .llm-box {
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+
+    .picker {
+      border: 1px solid var(--line);
+      background: var(--field);
+      border-radius: 4px;
+      padding: 12px;
+    }
+
+    .picker-top {
+      display: grid;
+      grid-template-columns: 160px 1fr auto;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 700px) {
+      .picker-top { grid-template-columns: 1fr; }
+    }
+
+    .picker-top label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--quiet);
+    }
+
+    .crumbs {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--quiet);
+      margin-bottom: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .browser-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 700px) {
+      .browser-grid { grid-template-columns: 1fr; }
+    }
+
+    .browser-col h3 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+
+    select.browser {
+      width: 100%;
+      min-height: 180px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .picker-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    .picker-actions .sel {
+      color: var(--quiet);
+      font-size: 13px;
+      margin-left: auto;
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Local RAG</h1>
-    <p class="lede">Index a folder of notes, PDFs, photos, and videos on this computer. Read the retrieved passages first. Call a language model only when you want one.</p>
-    <div class="row">
-      <label class="grow">Folder
-        <input id="folder" placeholder="/home/you/notes" />
-      </label>
-      <button id="index-btn">Index folder</button>
-    </div>
-    <div id="log" class="log">Waiting.</div>
-  </header>
-  <main class="layout">
-    <section>
-      <h2>Files in the index</h2>
-      <div id="files">Nothing indexed yet.</div>
-    </section>
-    <section>
-      <h2>Ask</h2>
-      <div class="modes">
-        <button id="mode-local" aria-pressed="true">Local preview</button>
-        <button id="mode-llm" class="secondary" aria-pressed="false">Language model</button>
-      </div>
-      <textarea id="question" placeholder="What did the notes say about displacement in Addis Ababa?"></textarea>
-      <div class="filters" style="margin-top:8px">
-        <label>Type
-          <select id="kind">
-            <option value="any">any</option>
-            <option value="text">text</option>
-            <option value="pdf">pdf</option>
-            <option value="docx">docx</option>
-            <option value="image">image</option>
-            <option value="video">video</option>
-          </select>
-        </label>
-        <label>Country
-          <input id="country" placeholder="Ethiopia" />
-        </label>
-        <label>Year
-          <input id="year" placeholder="2026" size="6" />
-        </label>
-        <button id="ask-btn">Search</button>
-      </div>
-      <div id="llm-settings" hidden>
-        <div class="row">
-          <label class="grow">API base
-            <input id="llm-base" value="http://127.0.0.1:11434/v1" />
+  <div class="page">
+    <header>
+      <div class="brand">local</div>
+      <h1>Search the files on this computer</h1>
+      <p>Pick a place on this machine, choose files or a folder, then search. Passages come back first. A model is optional.</p>
+    </header>
+
+    <section class="block">
+      <h2>What to index</h2>
+      <p class="hint">Pick a place, double-click a folder to open it, then select files. Hold Ctrl (or Cmd) for more than one.</p>
+      <div class="picker">
+        <div class="picker-top">
+          <label>Place
+            <select id="root-select"></select>
           </label>
-          <label>Model
-            <input id="llm-model" value="qwen2.5:1.5b" />
+          <label>Current folder
+            <select id="folder-jump"></select>
           </label>
-          <label>Key
-            <input id="llm-key" type="password" placeholder="optional" />
-          </label>
+          <button id="up-btn" class="quiet" type="button">Up</button>
         </div>
-        <p class="meta">Sends a POST to <code>/chat/completions</code>. Ollama speaks this shape. If the server is down, the passages still show. On this machine <code>qwen2:0.5b</code> invented a date; <code>qwen2.5:1.5b</code> stayed on the files and took about a minute.</p>
+        <div id="crumbs" class="crumbs"></div>
+        <div class="browser-grid">
+          <div class="browser-col">
+            <h3>Folders</h3>
+            <select id="folder-list" class="browser" size="10"></select>
+          </div>
+          <div class="browser-col">
+            <h3>Files</h3>
+            <select id="file-list" class="browser" size="10" multiple></select>
+          </div>
+        </div>
+        <div class="picker-actions">
+          <button id="index-files-btn" class="primary" type="button">Index selected files</button>
+          <button id="index-folder-btn" class="quiet" type="button">Index this folder</button>
+          <span id="sel-count" class="sel"></span>
+        </div>
       </div>
-      <div id="status"></div>
-      <div id="answer" class="answer">Ask something after the folder is indexed.</div>
-      <div id="sources"></div>
-      <details>
-        <summary>Request that a language model would receive</summary>
-        <pre id="payload">Nothing yet.</pre>
-      </details>
+      <div id="log" class="log">Ready.</div>
     </section>
-  </main>
+
+    <div class="split">
+      <section class="block">
+        <div class="row spread">
+          <h2 style="margin:0">Indexed</h2>
+          <span id="count" class="hint" style="margin:0"></span>
+        </div>
+        <div id="files" class="list empty">Nothing indexed yet.</div>
+      </section>
+
+      <section class="block">
+        <h2>Ask</h2>
+        <div class="row">
+          <button id="mode-local" type="button" aria-pressed="true">Passages only</button>
+          <button id="mode-llm" class="quiet" type="button" aria-pressed="false">With a model</button>
+        </div>
+        <label class="field" for="question" style="margin-top:12px">Question</label>
+        <textarea id="question" class="question" placeholder="What did I write about the eder in Addis Ababa?"></textarea>
+        <div class="filters">
+          <label>Type
+            <select id="kind">
+              <option value="any">any</option>
+              <option value="text">text</option>
+              <option value="pdf">pdf</option>
+              <option value="docx">docx</option>
+              <option value="image">image</option>
+              <option value="video">video</option>
+            </select>
+          </label>
+          <label>Country
+            <input id="country" type="text" />
+          </label>
+          <label>City
+            <input id="city" type="text" />
+          </label>
+          <label class="year">Year
+            <input id="year" type="text" />
+          </label>
+          <button id="ask-btn" class="primary" type="button">Search</button>
+        </div>
+        <div id="llm-settings" class="llm-box" hidden>
+          <div class="filters">
+            <label style="flex:1;min-width:160px">API base
+              <input id="llm-base" type="text" value="http://127.0.0.1:11434/v1" />
+            </label>
+            <label>Model
+              <input id="llm-model" type="text" value="qwen2.5:1.5b" />
+            </label>
+            <label>Key
+              <input id="llm-key" type="password" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+        <div id="status"></div>
+        <div id="answer" class="answer">Ask something after indexing.</div>
+        <div id="sources"></div>
+        <details>
+          <summary>Request sent to the model</summary>
+          <pre id="payload">—</pre>
+        </details>
+      </section>
+    </div>
+  </div>
+
   <script>
-    const folder = document.querySelector("#folder");
     const logEl = document.querySelector("#log");
     const filesEl = document.querySelector("#files");
+    const countEl = document.querySelector("#count");
     const answerEl = document.querySelector("#answer");
     const sourcesEl = document.querySelector("#sources");
     const payloadEl = document.querySelector("#payload");
     const statusEl = document.querySelector("#status");
-    const indexBtn = document.querySelector("#index-btn");
+    const indexFilesBtn = document.querySelector("#index-files-btn");
+    const indexFolderBtn = document.querySelector("#index-folder-btn");
     const askBtn = document.querySelector("#ask-btn");
     const llmSettings = document.querySelector("#llm-settings");
+    const rootSelect = document.querySelector("#root-select");
+    const folderJump = document.querySelector("#folder-jump");
+    const folderList = document.querySelector("#folder-list");
+    const fileList = document.querySelector("#file-list");
+    const crumbs = document.querySelector("#crumbs");
+    const upBtn = document.querySelector("#up-btn");
+    const selCount = document.querySelector("#sel-count");
+
     let mode = "local";
     let poll = null;
+    let currentPath = "";
+    let parentPath = null;
+    let currentFolders = [];
 
-    const saved = JSON.parse(localStorage.getItem("local-rag-settings") || "{}");
-    if (saved.folder) folder.value = saved.folder;
+    const saved = JSON.parse(localStorage.getItem("local-files-ui") || "{}");
     if (saved.base) document.querySelector("#llm-base").value = saved.base;
     if (saved.model) document.querySelector("#llm-model").value = saved.model;
 
     function saveSettings() {
-      localStorage.setItem("local-rag-settings", JSON.stringify({
-        folder: folder.value,
+      localStorage.setItem("local-files-ui", JSON.stringify({
+        browsePath: currentPath,
         base: document.querySelector("#llm-base").value,
         model: document.querySelector("#llm-model").value,
       }));
@@ -208,56 +533,168 @@
     document.querySelector("#mode-local").onclick = () => setMode("local");
     document.querySelector("#mode-llm").onclick = () => setMode("llm");
 
-    async function loadFiles() {
-      const res = await fetch("/api/documents");
-      const data = await res.json();
-      if (!data.files.length) {
-        filesEl.textContent = "Nothing indexed yet.";
-        return;
-      }
-      filesEl.innerHTML = data.files.map(file => `
-        <article class="file">
-          <strong>${escapeHtml(file.name)}</strong>
-          <div class="meta">${escapeHtml(file.kind)}${file.ocr_used ? " · OCR" : ""} · ${escapeHtml(file.captured_at || "time unknown")} · ${escapeHtml(file.country || "country unknown")} · ${file.chars} characters</div>
-          ${file.warning ? `<div class="note">${escapeHtml(file.warning)}</div>` : ""}
-        </article>`).join("");
-    }
-
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, ch => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[ch]));
     }
 
+    function shortWhen(value) {
+      if (!value) return "";
+      return String(value).slice(0, 10);
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function updateSelCount() {
+      const n = [...fileList.selectedOptions].length;
+      selCount.textContent = n ? `${n} file${n === 1 ? "" : "s"} selected` : "";
+    }
+
+    async function openDir(path) {
+      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        logEl.textContent = err.detail || "Could not open folder.";
+        return;
+      }
+      const data = await res.json();
+      currentPath = data.path;
+      parentPath = data.parent;
+      currentFolders = data.folders || [];
+      crumbs.textContent = data.path;
+      upBtn.disabled = !data.parent;
+
+      rootSelect.innerHTML = (data.roots || []).map(root =>
+        `<option value="${escapeHtml(root.path)}">${escapeHtml(root.label)}</option>`
+      ).join("");
+      const match = (data.roots || []).find(root => data.path === root.path || data.path.startsWith(root.path + "/"));
+      if (match) rootSelect.value = match.path;
+
+      folderJump.innerHTML = [
+        `<option value="${escapeHtml(data.path)}">.</option>`,
+        ...currentFolders.map(folder =>
+          `<option value="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}/</option>`
+        ),
+      ].join("");
+
+      folderList.innerHTML = currentFolders.length
+        ? currentFolders.map(folder =>
+            `<option value="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}/</option>`
+          ).join("")
+        : `<option disabled>(no subfolders)</option>`;
+
+      fileList.innerHTML = (data.files || []).length
+        ? data.files.map(file =>
+            `<option value="${escapeHtml(file.path)}">${escapeHtml(file.name)}  ·  ${escapeHtml(file.kind)}  ·  ${formatSize(file.size)}</option>`
+          ).join("")
+        : `<option disabled>(no indexable files here)</option>`;
+
+      updateSelCount();
+      saveSettings();
+    }
+
+    rootSelect.onchange = () => openDir(rootSelect.value);
+    folderJump.onchange = () => {
+      if (folderJump.value) openDir(folderJump.value);
+    };
+    upBtn.onclick = () => {
+      if (parentPath) openDir(parentPath);
+    };
+    folderList.ondblclick = () => {
+      const option = folderList.selectedOptions[0];
+      if (option && option.value && !option.disabled) openDir(option.value);
+    };
+    fileList.addEventListener("change", updateSelCount);
+
+    async function loadFiles() {
+      const res = await fetch("/api/documents");
+      const data = await res.json();
+      countEl.textContent = data.files.length ? `${data.files.length} files` : "";
+      if (!data.files.length) {
+        filesEl.className = "list empty";
+        filesEl.textContent = "Nothing indexed yet.";
+        return;
+      }
+      filesEl.className = "list";
+      filesEl.innerHTML = data.files.map(file => {
+        const place = [file.city, file.country].filter(Boolean).join(", ");
+        const bits = [file.kind, place, file.roles].filter(Boolean);
+        return `<article class="item">
+          <div class="name">${escapeHtml(file.name)}</div>
+          <div class="when">${escapeHtml(shortWhen(file.captured_at))}</div>
+          <div class="meta">${escapeHtml(bits.join(" · "))}</div>
+        </article>`;
+      }).join("");
+    }
+
+    function setIndexing(busy) {
+      indexFilesBtn.disabled = busy;
+      indexFolderBtn.disabled = busy;
+    }
+
     async function pollJob() {
       const res = await fetch("/api/job");
       const job = await res.json();
-      logEl.textContent = (job.log || []).join("\n") || "Waiting.";
-      indexBtn.disabled = job.state === "running";
+      logEl.textContent = (job.log || []).join("\n") || "Ready.";
+      setIndexing(job.state === "running");
       if (job.state === "running") return;
       clearInterval(poll);
       poll = null;
       await loadFiles();
     }
 
-    indexBtn.onclick = async () => {
+    async function startIndex(body) {
       saveSettings();
-      indexBtn.disabled = true;
+      setIndexing(true);
       const res = await fetch("/api/index", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: folder.value }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         logEl.textContent = err.detail || "Could not start indexing.";
-        indexBtn.disabled = false;
+        setIndexing(false);
         return;
       }
       if (poll) clearInterval(poll);
-      poll = setInterval(pollJob, 800);
+      poll = setInterval(pollJob, 700);
       pollJob();
+    }
+
+    indexFilesBtn.onclick = () => {
+      const paths = [...fileList.selectedOptions]
+        .map(option => option.value)
+        .filter(value => value && !optionDisabled(optionByValue(fileList, value)));
+      const usable = [...fileList.selectedOptions]
+        .filter(option => !option.disabled && option.value)
+        .map(option => option.value);
+      if (!usable.length) {
+        logEl.textContent = "Select one or more files first.";
+        return;
+      }
+      startIndex({ paths: usable });
     };
+    indexFolderBtn.onclick = () => {
+      if (!currentPath) {
+        logEl.textContent = "Open a folder first.";
+        return;
+      }
+      startIndex({ path: currentPath });
+    };
+
+    function optionByValue(select, value) {
+      return [...select.options].find(option => option.value === value);
+    }
+    function optionDisabled(option) {
+      return !option || option.disabled;
+    }
 
     askBtn.onclick = async () => {
       saveSettings();
@@ -271,6 +708,7 @@
           mode,
           kind: document.querySelector("#kind").value,
           country: document.querySelector("#country").value,
+          city: document.querySelector("#city").value,
           year: document.querySelector("#year").value,
           llm_base_url: document.querySelector("#llm-base").value,
           llm_model: document.querySelector("#llm-model").value,
@@ -285,22 +723,34 @@
       }
       const data = await res.json();
       if (data.llm_error) {
-        statusEl.innerHTML = `<div class="banner bad">The model was not called successfully. Showing the local passages instead.<br>${escapeHtml(data.llm_error)}</div>`;
-      } else if (mode === "local") {
-        statusEl.innerHTML = `<div class="banner warn">Local preview. The model request is below, unsent.</div>`;
+        statusEl.innerHTML = `<div class="banner">Model call failed — showing passages instead.</div>`;
       }
       answerEl.textContent = data.answer || "";
-      sourcesEl.innerHTML = (data.sources || []).map((hit, i) => `
-        <article class="source">
-          <h3>[${i + 1}] ${escapeHtml(hit.path.split("/").pop())}</h3>
-          <div class="meta">${escapeHtml(hit.kind)} · ${escapeHtml(hit.captured_at || "time unknown")} · ${escapeHtml(hit.country || "country unknown")} · score ${hit.score.toFixed(2)}</div>
-          <p>${escapeHtml(hit.text.slice(0, 700))}</p>
-        </article>`).join("");
+      sourcesEl.innerHTML = (data.sources || []).map((hit, i) => {
+        const place = [hit.city, hit.country].filter(Boolean).join(", ") || "—";
+        return `<article class="hit">
+          <h3>${i + 1}. ${escapeHtml(hit.path.split("/").pop())}</h3>
+          <div class="meta">${escapeHtml(hit.kind)} · ${escapeHtml(hit.captured_at || "—")} · ${escapeHtml(place)}${hit.roles ? " · " + escapeHtml(hit.roles) : ""}</div>
+          <p>${escapeHtml(hit.text.slice(0, 620))}</p>
+        </article>`;
+      }).join("");
       payloadEl.textContent = JSON.stringify(data.llm_request, null, 2);
     };
 
+    async function bootBrowser() {
+      try {
+        const res = await fetch("/api/browse/roots");
+        const data = await res.json();
+        const docs = (data.roots || []).find(root => root.label === "Documents");
+        await openDir(saved.browsePath || (docs && docs.path) || null);
+      } catch (err) {
+        await openDir(null);
+      }
+    }
+
     loadFiles();
     pollJob();
+    bootBrowser();
   </script>
 </body>
 </html>

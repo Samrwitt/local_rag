@@ -1,4 +1,4 @@
-"""Small local web UI and JSON API."""
+"""Local web UI and JSON API. Access is treated as allowed for this host user."""
 
 from __future__ import annotations
 
@@ -10,14 +10,15 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from local_rag.answer import call_llm, llm_request_body, local_preview, retrieve
+from local_rag.browse import list_dir, roots
+from local_rag.pipeline import index_folder, index_paths
 from local_rag.settings import MODEL_ID
-from local_rag.pipeline import index_folder
 from local_rag import store
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static" / "index.html"
 
-app = FastAPI(title="Local RAG", version="0.1.0")
+app = FastAPI(title="Local files", version="0.2.0")
 
 _job_lock = threading.Lock()
 _job = {
@@ -29,17 +30,21 @@ _job = {
 
 
 class IndexRequest(BaseModel):
-    path: str
+    # Selected files for v1. Folder crawl is the scale-up path.
+    paths: list[str] = Field(default_factory=list)
+    path: str | None = None
     max_files: int = Field(default=400, ge=1, le=5000)
+    purge_missing: bool = False
 
 
 class QueryRequest(BaseModel):
     question: str
     mode: str = "local"
-    k: int = Field(default=5, ge=1, le=12)
+    k: int = Field(default=8, ge=1, le=20)
     kind: str | None = None
     country: str | None = None
     year: str | None = None
+    city: str | None = None
     llm_base_url: str = "http://127.0.0.1:11434/v1"
     llm_model: str = "qwen2.5:1.5b"
     llm_api_key: str = ""
@@ -63,6 +68,7 @@ def info():
         "embedding_model": MODEL_ID,
         "ocr_language": "eng",
         "indexed_files": len(files),
+        "access": "allowed for the running user; selected files now, auto-crawl later",
         "llm_api": "POST {base}/chat/completions  (OpenAI-compatible)",
         "default_llm_base_url": "http://127.0.0.1:11434/v1",
     }
@@ -73,6 +79,23 @@ def documents():
     return {"files": store.list_files()}
 
 
+@app.get("/api/browse/roots")
+def browse_roots():
+    return {"roots": roots()}
+
+
+@app.get("/api/browse")
+def browse(path: str | None = None):
+    try:
+        return list_dir(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/job")
 def job():
     with _job_lock:
@@ -81,18 +104,30 @@ def job():
 
 @app.post("/api/index")
 def start_index(body: IndexRequest):
-    folder = Path(body.path).expanduser()
+    paths = [p.strip() for p in body.paths if p and p.strip()]
+    folder = body.path.strip() if body.path else None
+    if not paths and not folder:
+        raise HTTPException(status_code=400, detail="Provide selected file paths, or a folder path")
+
     with _job_lock:
         if _job["state"] == "running":
             raise HTTPException(status_code=409, detail="An index is already running")
         _job["state"] = "running"
-        _job["log"] = [f"Starting index of {folder}"]
+        _job["log"] = ["Starting index"]
         _job["stats"] = None
         _job["error"] = None
 
     def run():
         try:
-            stats = index_folder(folder, max_files=body.max_files, on_event=_log)
+            if paths:
+                stats = index_paths(paths, on_event=_log)
+            else:
+                stats = index_folder(
+                    folder,
+                    max_files=body.max_files,
+                    on_event=_log,
+                    purge_missing=body.purge_missing,
+                )
             with _job_lock:
                 _job["state"] = "done"
                 _job["stats"] = stats
@@ -117,6 +152,7 @@ def query(body: QueryRequest):
         kind=None if not body.kind or body.kind == "any" else body.kind,
         country=body.country.strip() if body.country else None,
         year=body.year.strip() if body.year else None,
+        city=body.city.strip() if body.city else None,
     )
     request_body = llm_request_body(question, hits, body.llm_model)
     payload = {
