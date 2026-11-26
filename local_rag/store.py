@@ -147,8 +147,28 @@ def list_files() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+STOPWORDS = {
+    "a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "from", "with",
+    "about", "what", "when", "where", "who", "how", "did", "do", "does", "is",
+    "are", "was", "were", "my", "me", "i", "you", "your", "our", "this", "that",
+    "these", "those", "into", "over", "under", "than", "then", "also", "any",
+    "have", "has", "had", "write", "wrote", "written", "tell", "show", "find",
+    "please", "can", "could", "would", "should",
+}
+
+PLACEISH = {
+    "addis", "ababa", "ethiopia", "italy", "italia", "france", "germany", "spain",
+    "kenya", "rome", "paris", "london", "berlin", "hotel", "booking", "receipt",
+    "trip", "travel", "vacation", "holiday", "visit", "year", "country", "city",
+}
+
+
 def _tokens(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]{2,}", (text or "").lower()))
+
+
+def _query_terms(query: str) -> set[str]:
+    return {term for term in _tokens(query) if term not in STOPWORDS}
 
 
 def search(
@@ -171,7 +191,7 @@ def search(
     effective_country = country or hints.get("country")
     effective_year = year or hints.get("year")
     effective_city = city or hints.get("city")
-    query_terms = _tokens(query)
+    query_terms = _query_terms(query)
     scored = []
     qvec = query_vec.astype(np.float32)
     for row in rows:
@@ -192,14 +212,19 @@ def search(
         terms = text_terms | path_terms
         overlap = (len(query_terms & terms) / len(query_terms)) if query_terms else 0.0
         # Rare content words (eder, displacement) matter more than place names in the filename.
+        distinctive = {term for term in query_terms if term not in PLACEISH}
         content_hits = query_terms & text_terms
+        distinct_in_text = distinctive & text_terms
         name_hits = (len(query_terms & path_terms) / len(query_terms)) if query_terms else 0.0
+        # Filename matches on place words alone are weak (every Addis tour image).
+        if distinctive:
+            name_hits = len(distinctive & path_terms) / len(distinctive)
         rare_bonus = 0.0
-        for term in content_hits:
-            if len(term) >= 4 and term not in {"addis", "ababa", "ethiopia", "italy", "france", "what", "write", "about", "with", "from", "this", "that", "have", "trip", "travel"}:
-                rare_bonus += 0.08
-        rare_bonus = min(rare_bonus, 0.24)
-        score = 0.62 * cosine + 0.22 * overlap + 0.12 * name_hits + rare_bonus
+        for term in distinct_in_text:
+            if len(term) >= 4:
+                rare_bonus += 0.10
+        rare_bonus = min(rare_bonus, 0.30)
+        score = 0.60 * cosine + 0.20 * overlap + 0.10 * name_hits + rare_bonus
         # Soft trip boosts so "Italy 2019" lifts photos, videos, receipts together.
         # Only boost when the file actually carries that metadata — not every
         # academic paper that once mentioned a conference city.
@@ -245,8 +270,57 @@ def search(
             seen_paths.add(row["path"])
         else:
             leftovers.append(item)
-        if len(hits) >= k:
+        if len(hits) >= max(k * 3, 12):
             break
-    if len(hits) < k:
-        hits.extend(leftovers[: k - len(hits)])
-    return hits
+    if len(hits) < max(k * 3, 12):
+        hits.extend(leftovers[: max(k * 3, 12) - len(hits)])
+    # Prefer files tagged with the asked country; if none, only keep strong
+    # non-place evidence (so "Italy hotel" with no Italy files returns nothing).
+    if effective_country:
+        country_l = str(effective_country).lower()
+        matched = [
+            hit
+            for hit in hits
+            if (hit.get("country") or "").lower() == country_l
+            or country_l in Path(hit["path"]).name.lower()
+            or country_l in (hit.get("text") or "").lower()
+        ]
+        if matched:
+            hits = matched
+        else:
+            distinctive = {term for term in query_terms if term not in PLACEISH}
+            strong = []
+            for hit in hits:
+                terms = _tokens(hit.get("text") or "") | _tokens(Path(hit["path"]).name)
+                if distinctive and (distinctive & terms) and hit["score"] >= 0.55:
+                    strong.append(hit)
+            hits = strong
+    return _keep_confident(hits, k=k, query_terms=query_terms)
+
+
+def _keep_confident(hits: list[dict], k: int, query_terms: set[str] | None = None) -> list[dict]:
+    """Drop near-misses so weak files never reach the answer step."""
+    if not hits:
+        return []
+    top = hits[0]
+    # Absolute floor: below this, treat as "no good match".
+    if top["score"] < 0.48 or top["cosine"] < 0.32:
+        return []
+    distinctive = {term for term in (query_terms or set()) if term not in PLACEISH}
+    top_text = _tokens(top.get("text") or "")
+    top_has_distinct = bool(distinctive & top_text) if distinctive else False
+    kept = []
+    for hit in hits:
+        if hit["score"] < max(0.45, top["score"] * 0.82):
+            continue
+        if hit["cosine"] < 0.25 and hit["overlap"] < 0.4:
+            continue
+        # If the best hit matched a distinctive word, later hits must too.
+        if top_has_distinct and distinctive:
+            hit_terms = _tokens(hit.get("text") or "") | _tokens(Path(hit["path"]).name)
+            if not (distinctive & hit_terms):
+                continue
+        kept.append(hit)
+        if len(kept) >= k:
+            break
+    return kept

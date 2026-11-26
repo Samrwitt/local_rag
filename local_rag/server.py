@@ -9,11 +9,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from local_rag.answer import call_llm, llm_request_body, local_preview, retrieve
+from local_rag.answer import ask_verified, call_llm, llm_request_body, local_preview
 from local_rag.browse import list_dir, roots
 from local_rag.pipeline import index_folder, index_paths
-from local_rag.settings import MODEL_ID
-from local_rag import store
+from local_rag.settings import EMBEDDING_CANDIDATES, MODEL_ID, RERANKER_CANDIDATES
+from local_rag import kb, store
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static" / "index.html"
@@ -39,8 +39,9 @@ class IndexRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
-    mode: str = "local"
-    k: int = Field(default=8, ge=1, le=20)
+    mode: str = "local"  # local = verified retrieval; llm = optional last step
+    k: int = Field(default=5, ge=1, le=20)
+    session_id: str | None = None
     kind: str | None = None
     country: str | None = None
     year: str | None = None
@@ -64,12 +65,17 @@ def home():
 @app.get("/api/info")
 def info():
     files = store.list_files()
+    kb.load_entries()
     return {
         "embedding_model": MODEL_ID,
-        "ocr_language": "eng",
+        "embedding_candidates": EMBEDDING_CANDIDATES,
+        "reranker_candidates": RERANKER_CANDIDATES,
+        "retrieval": "preprocess → dense + BM25 → RRF → optional rerank → confidence",
+        "kb_entries": len(kb.load_entries()),
+        "ocr_language": "eng+am possible later",
         "indexed_files": len(files),
         "access": "allowed for the running user; selected files now, auto-crawl later",
-        "llm_api": "POST {base}/chat/completions  (OpenAI-compatible)",
+        "llm_api": "optional final step only; default path is verified retrieval",
         "default_llm_base_url": "http://127.0.0.1:11434/v1",
     }
 
@@ -146,19 +152,22 @@ def query(body: QueryRequest):
     question = body.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question is empty")
-    hits = retrieve(
-        question,
-        k=body.k,
-        kind=None if not body.kind or body.kind == "any" else body.kind,
-        country=body.country.strip() if body.country else None,
-        year=body.year.strip() if body.year else None,
-        city=body.city.strip() if body.city else None,
-    )
+    kind = None if not body.kind or body.kind == "any" else body.kind
+    result = ask_verified(question, k=body.k, session_id=body.session_id, kind=kind)
+    hits = result.get("sources") or []
     request_body = llm_request_body(question, hits, body.llm_model)
     payload = {
         "mode": body.mode,
         "question": question,
+        "resolved_question": result.get("resolved_question"),
+        "session_id": result.get("session_id"),
+        "language": result.get("language"),
+        "intent": result.get("intent"),
+        "confidence": result.get("confidence"),
+        "abstained": result.get("abstained"),
+        "stages": result.get("stages"),
         "sources": hits,
+        "llm_used": False,
         "llm_request": {
             "method": "POST",
             "url": body.llm_base_url.rstrip("/") + "/chat/completions",
@@ -169,11 +178,16 @@ def query(body: QueryRequest):
         "llm_error": None,
     }
     if body.mode != "llm":
-        payload["answer"] = local_preview(question, hits)
+        payload["answer"] = result.get("answer")
+        payload["preview"] = local_preview(question, hits, result=result)
+        return payload
+    if result.get("abstained") or not hits:
+        payload["answer"] = result.get("answer")
         return payload
     try:
         payload["answer"] = call_llm(body.llm_base_url, body.llm_model, body.llm_api_key, request_body)
+        payload["llm_used"] = True
     except Exception as exc:
         payload["llm_error"] = str(exc)
-        payload["answer"] = local_preview(question, hits)
+        payload["answer"] = result.get("answer")
     return payload

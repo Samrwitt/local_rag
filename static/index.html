@@ -3,21 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>files</title>
+  <title>Shelf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --paper: #eef1ec;
-      --ink: #24302a;
-      --quiet: #5d6b63;
-      --line: #cfd7d1;
-      --field: #f7f9f6;
-      --chip: #dfe8e2;
-      --go: #2f6f57;
-      --go-ink: #f4fff8;
-      --bad: #8a3b32;
+      --bg0: #1a3a32;
+      --bg1: #245247;
+      --paper: #f3efe6;
+      --paper-2: #fffdf8;
+      --ink: #1c2b26;
+      --mute: #5a6e66;
+      --line: #d9d2c4;
+      --leaf: #2f7a5e;
+      --leaf-deep: #215844;
+      --leaf-soft: #d8ebe2;
+      --glow: rgba(255, 214, 160, 0.22);
+      --shadow: 0 18px 50px rgba(18, 40, 34, 0.18);
+      --radius: 22px;
     }
 
     * { box-sizing: border-box; }
@@ -26,522 +30,512 @@
       margin: 0;
       min-height: 100vh;
       color: var(--ink);
+      font: 16px/1.55 Nunito, "Segoe UI", sans-serif;
       background:
-        radial-gradient(1200px 500px at 10% -10%, #dfe8e1 0%, transparent 55%),
-        linear-gradient(180deg, #f4f6f2 0%, var(--paper) 40%, #e8ebe5 100%);
-      font: 15px/1.5 "IBM Plex Sans", "Segoe UI", sans-serif;
+        radial-gradient(900px 480px at 85% -10%, var(--glow), transparent 55%),
+        radial-gradient(700px 420px at 0% 100%, rgba(90, 160, 130, 0.18), transparent 50%),
+        linear-gradient(165deg, var(--bg0), var(--bg1) 45%, #17352e);
     }
 
-    .page {
-      width: min(920px, calc(100% - 32px));
+    .shell {
+      width: min(880px, calc(100% - 28px));
       margin: 0 auto;
-      padding: 36px 0 64px;
+      padding: 40px 0 72px;
     }
 
-    header {
+    .hero {
+      color: #f6f1e7;
       margin-bottom: 28px;
-      padding-bottom: 18px;
-      border-bottom: 1px solid var(--line);
+      animation: rise 0.7s ease both;
     }
 
-    .brand {
-      display: inline-block;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: lowercase;
-      color: var(--go);
+    .hero .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .hero .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #f0c56d;
+      box-shadow: 0 0 0 6px rgba(240, 197, 109, 0.18);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 650;
+      font-size: clamp(2.4rem, 7vw, 4rem);
+      letter-spacing: -0.03em;
+      line-height: 0.95;
+    }
+
+    .hero p {
+      margin: 14px 0 0;
+      max-width: 28rem;
+      color: rgba(246, 241, 231, 0.78);
+      font-size: 1.05rem;
+    }
+
+    .stage {
+      background: var(--paper);
+      border-radius: calc(var(--radius) + 6px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: rise 0.85s ease 0.08s both;
+    }
+
+    .panel {
+      padding: 28px 28px 24px;
+      background: var(--paper-2);
+    }
+
+    .panel + .panel {
+      border-top: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .step {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .step .n {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--leaf);
+      font-weight: 650;
+    }
+
+    .step h2 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .blurb {
+      margin: 0 0 18px;
+      color: var(--mute);
+    }
+
+    .place-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .chip {
+      border: 1px solid transparent;
+      background: var(--leaf-soft);
+      color: var(--leaf-deep);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .chip:hover { transform: translateY(-1px); }
+    .chip[aria-pressed="true"] {
+      background: var(--leaf);
+      color: #f7fff9;
+    }
+
+    .nav-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
       margin-bottom: 10px;
     }
 
-    h1 {
-      margin: 0 0 8px;
-      font-size: clamp(28px, 4vw, 36px);
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      line-height: 1.15;
+    .path-pill {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: #efe9dc;
+      color: var(--mute);
+      font-size: 0.88rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    header p {
-      margin: 0;
-      max-width: 38rem;
-      color: var(--quiet);
-    }
-
-    .block { margin-bottom: 28px; }
-
-    .block > h2 {
-      margin: 0 0 10px;
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    .hint {
-      margin: -4px 0 12px;
-      color: var(--quiet);
-      font-size: 13px;
-    }
-
-    label.field {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 13px;
-      color: var(--quiet);
-    }
-
-    input[type="text"],
-    textarea,
-    select {
-      width: 100%;
+    .ghost {
       border: 1px solid var(--line);
-      background: var(--field);
+      background: transparent;
       color: var(--ink);
-      border-radius: 4px;
-      padding: 9px 11px;
+      border-radius: 14px;
+      padding: 10px 14px;
       font: inherit;
-    }
-
-    textarea.paths {
-      min-height: 132px;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 12px;
-      line-height: 1.45;
-      resize: vertical;
-    }
-
-    textarea.question {
-      min-height: 74px;
-      resize: vertical;
-    }
-
-    input:focus,
-    textarea:focus,
-    select:focus {
-      outline: 2px solid color-mix(in srgb, var(--go) 35%, white);
-      border-color: var(--go);
-    }
-
-    .row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-top: 10px;
-    }
-
-    .row.spread {
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .grow { flex: 1; min-width: 180px; }
-
-    button {
-      border: 1px solid transparent;
-      border-radius: 4px;
-      padding: 8px 14px;
-      font: inherit;
-      font-weight: 500;
+      font-weight: 700;
       cursor: pointer;
     }
 
-    button.primary {
-      background: var(--go);
-      color: var(--go-ink);
+    .ghost:disabled { opacity: 0.4; cursor: default; }
+
+    .browser {
+      display: grid;
+      grid-template-columns: 0.9fr 1.2fr;
+      gap: 12px;
     }
 
-    button.quiet {
-      background: transparent;
-      color: var(--ink);
-      border-color: var(--line);
+    @media (max-width: 720px) {
+      .browser { grid-template-columns: 1fr; }
+      .panel { padding: 22px 18px; }
     }
 
-    button:disabled {
-      opacity: 0.55;
-      cursor: wait;
-    }
-
-    button[aria-pressed="true"] {
-      background: var(--chip);
-      border-color: var(--line);
-      color: var(--ink);
-    }
-
-    .log {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-left: 3px solid var(--chip);
-      color: var(--quiet);
-      font: 12px/1.45 "IBM Plex Mono", ui-monospace, monospace;
-      white-space: pre-wrap;
-      max-height: 110px;
+    .col {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      min-height: 220px;
+      max-height: 280px;
       overflow: auto;
     }
 
-    .split {
-      display: grid;
-      grid-template-columns: 0.95fr 1.15fr;
-      gap: 28px;
-      align-items: start;
-    }
-
-    @media (max-width: 800px) {
-      .split { grid-template-columns: 1fr; gap: 22px; }
-    }
-
-    .list {
-      border-top: 1px solid var(--line);
-    }
-
-    .item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px 14px;
-      padding: 11px 0;
+    .col h3 {
+      margin: 0;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mute);
       border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      background: #fff;
     }
 
-    .item .name {
-      font-weight: 500;
-      overflow-wrap: anywhere;
+    .col button.item,
+    .col label.item {
+      display: flex;
+      width: 100%;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid #f0ebe1;
+      background: transparent;
+      padding: 11px 14px;
+      font: inherit;
+      color: var(--ink);
+      cursor: pointer;
     }
 
-    .item .when {
-      color: var(--quiet);
-      font-size: 12px;
+    .col button.item:hover,
+    .col label.item:hover { background: #f7f3ea; }
+
+    .col .item .ico {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      background: var(--leaf-soft);
+      color: var(--leaf-deep);
+      font-size: 0.85rem;
+    }
+
+    .col .item .txt {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
-      text-align: right;
-    }
-
-    .item .meta {
-      grid-column: 1 / -1;
-      color: var(--quiet);
-      font-size: 12px;
-    }
-
-    .empty {
-      color: var(--quiet);
-      padding: 8px 0;
-    }
-
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0;
-      align-items: end;
-    }
-
-    .filters label {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 12px;
-      color: var(--quiet);
-      min-width: 88px;
-    }
-
-    .filters label.year { min-width: 70px; }
-
-    .answer {
-      margin-top: 8px;
-      padding: 12px 0 4px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      border-top: 1px solid var(--line);
-    }
-
-    .banner {
-      margin: 8px 0;
-      color: var(--bad);
-      font-size: 13px;
-    }
-
-    .hit {
-      padding: 12px 0;
-      border-top: 1px solid var(--line);
-    }
-
-    .hit h3 {
-      margin: 0 0 3px;
-      font-size: 14px;
       font-weight: 600;
     }
 
+    .col .item .sub {
+      color: var(--mute);
+      font-size: 0.8rem;
+      font-weight: 400;
+    }
+
+    .col label.item input {
+      accent-color: var(--leaf);
+      width: 16px;
+      height: 16px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    .primary {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 20px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--leaf);
+      color: #f4fff8;
+      box-shadow: 0 8px 20px rgba(47, 122, 94, 0.28);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .primary:hover { background: var(--leaf-deep); transform: translateY(-1px); }
+    .primary:disabled { opacity: 0.55; cursor: wait; transform: none; }
+
+    .soft {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-left: auto;
+      color: var(--mute);
+      font-size: 0.92rem;
+    }
+
+    .ask-box {
+      display: grid;
+      gap: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px 18px;
+      font: inherit;
+      font-size: 1.05rem;
+      background: #fff;
+      color: var(--ink);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+
+    textarea:focus {
+      outline: 3px solid rgba(47, 122, 94, 0.2);
+      border-color: var(--leaf);
+    }
+
+    .ask-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .count-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--leaf-soft);
+      color: var(--leaf-deep);
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .answer {
+      margin-top: 8px;
+      padding: 18px;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      min-height: 72px;
+    }
+
+    .answer.empty { color: var(--mute); }
+
+    .hits { margin-top: 14px; display: grid; gap: 10px; }
+
+    .hit {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+      animation: rise 0.4s ease both;
+    }
+
+    .hit h3 {
+      margin: 0 0 4px;
+      font-size: 1rem;
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 650;
+    }
+
     .hit .meta {
-      color: var(--quiet);
-      font-size: 12px;
+      color: var(--mute);
+      font-size: 0.85rem;
       margin-bottom: 6px;
     }
 
     .hit p {
       margin: 0;
       color: var(--ink);
-      font-size: 13px;
+      font-size: 0.95rem;
     }
 
-    details {
-      margin-top: 14px;
+    .indexed {
+      margin-top: 18px;
+      color: var(--mute);
+      font-size: 0.92rem;
     }
 
-    summary {
+    .indexed summary {
       cursor: pointer;
-      color: var(--quiet);
-      font-size: 13px;
+      font-weight: 700;
+      color: var(--leaf-deep);
+      list-style: none;
     }
 
-    pre {
-      margin: 8px 0 0;
-      padding: 10px;
-      background: var(--field);
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      font: 11px/1.45 "IBM Plex Mono", ui-monospace, monospace;
-      color: var(--quiet);
-    }
+    .indexed summary::-webkit-details-marker { display: none; }
 
-    .llm-box {
-      margin-top: 8px;
-      padding-top: 8px;
-    }
-
-    .picker {
-      border: 1px solid var(--line);
-      background: var(--field);
-      border-radius: 4px;
-      padding: 12px;
-    }
-
-    .picker-top {
+    .indexed-list {
+      margin-top: 10px;
       display: grid;
-      grid-template-columns: 160px 1fr auto;
-      gap: 8px;
-      align-items: end;
-      margin-bottom: 10px;
+      gap: 6px;
+      max-height: 180px;
+      overflow: auto;
     }
 
-    @media (max-width: 700px) {
-      .picker-top { grid-template-columns: 1fr; }
+    .indexed-list div {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #efe9dc;
+      font-size: 0.88rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .picker-top label {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 12px;
-      color: var(--quiet);
+    .banner {
+      margin-top: 10px;
+      color: #8a3b32;
+      font-size: 0.92rem;
     }
 
-    .crumbs {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 12px;
-      color: var(--quiet);
-      margin-bottom: 8px;
-      overflow-wrap: anywhere;
-    }
-
-    .browser-grid {
-      display: grid;
-      grid-template-columns: 1fr 1.2fr;
-      gap: 12px;
-    }
-
-    @media (max-width: 700px) {
-      .browser-grid { grid-template-columns: 1fr; }
-    }
-
-    .browser-col h3 {
-      margin: 0 0 6px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--quiet);
-    }
-
-    select.browser {
-      width: 100%;
-      min-height: 180px;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 12px;
-      background: #fff;
-    }
-
-    .picker-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
-      align-items: center;
-    }
-
-    .picker-actions .sel {
-      color: var(--quiet);
-      font-size: 13px;
-      margin-left: auto;
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <header>
-      <div class="brand">local</div>
-      <h1>Search the files on this computer</h1>
-      <p>Pick a place on this machine, choose files or a folder, then search. Passages come back first. A model is optional.</p>
+  <div class="shell">
+    <header class="hero">
+      <div class="mark"><span class="dot" aria-hidden="true"></span><span>Shelf</span></div>
+      <h1>Your files,<br />easy to ask.</h1>
+      <p>Choose a folder or a few files, then ask in plain language — trips, notes, photos, whatever you saved.</p>
     </header>
 
-    <section class="block">
-      <h2>What to index</h2>
-      <p class="hint">Pick a place, double-click a folder to open it, then select files. Hold Ctrl (or Cmd) for more than one.</p>
-      <div class="picker">
-        <div class="picker-top">
-          <label>Place
-            <select id="root-select"></select>
-          </label>
-          <label>Current folder
-            <select id="folder-jump"></select>
-          </label>
-          <button id="up-btn" class="quiet" type="button">Up</button>
+    <main class="stage">
+      <section class="panel">
+        <div class="step"><span class="n">1</span><h2>Choose what to include</h2></div>
+        <p class="blurb">Start somewhere familiar. Open a folder, tick the files you want, or include everything in the folder.</p>
+
+        <div class="place-row" id="roots" role="group" aria-label="Places on this computer"></div>
+
+        <div class="nav-row">
+          <div class="path-pill" id="crumbs">Opening…</div>
+          <button class="ghost" id="up-btn" type="button">Go up</button>
         </div>
-        <div id="crumbs" class="crumbs"></div>
-        <div class="browser-grid">
-          <div class="browser-col">
+
+        <div class="browser">
+          <div class="col" id="folder-col">
             <h3>Folders</h3>
-            <select id="folder-list" class="browser" size="10"></select>
+            <div id="folder-list"></div>
           </div>
-          <div class="browser-col">
+          <div class="col" id="file-col">
             <h3>Files</h3>
-            <select id="file-list" class="browser" size="10" multiple></select>
+            <div id="file-list"></div>
           </div>
         </div>
-        <div class="picker-actions">
-          <button id="index-files-btn" class="primary" type="button">Index selected files</button>
-          <button id="index-folder-btn" class="quiet" type="button">Index this folder</button>
-          <span id="sel-count" class="sel"></span>
-        </div>
-      </div>
-      <div id="log" class="log">Ready.</div>
-    </section>
 
-    <div class="split">
-      <section class="block">
-        <div class="row spread">
-          <h2 style="margin:0">Indexed</h2>
-          <span id="count" class="hint" style="margin:0"></span>
+        <div class="actions">
+          <button class="primary" id="index-files-btn" type="button">Add selected files</button>
+          <button class="soft" id="index-folder-btn" type="button">Add this whole folder</button>
+          <span class="status" id="sel-count"></span>
         </div>
-        <div id="files" class="list empty">Nothing indexed yet.</div>
-      </section>
+        <div class="status" id="log" style="margin-top:10px">Ready when you are.</div>
 
-      <section class="block">
-        <h2>Ask</h2>
-        <div class="row">
-          <button id="mode-local" type="button" aria-pressed="true">Passages only</button>
-          <button id="mode-llm" class="quiet" type="button" aria-pressed="false">With a model</button>
-        </div>
-        <label class="field" for="question" style="margin-top:12px">Question</label>
-        <textarea id="question" class="question" placeholder="What did I write about the eder in Addis Ababa?"></textarea>
-        <div class="filters">
-          <label>Type
-            <select id="kind">
-              <option value="any">any</option>
-              <option value="text">text</option>
-              <option value="pdf">pdf</option>
-              <option value="docx">docx</option>
-              <option value="image">image</option>
-              <option value="video">video</option>
-            </select>
-          </label>
-          <label>Country
-            <input id="country" type="text" />
-          </label>
-          <label>City
-            <input id="city" type="text" />
-          </label>
-          <label class="year">Year
-            <input id="year" type="text" />
-          </label>
-          <button id="ask-btn" class="primary" type="button">Search</button>
-        </div>
-        <div id="llm-settings" class="llm-box" hidden>
-          <div class="filters">
-            <label style="flex:1;min-width:160px">API base
-              <input id="llm-base" type="text" value="http://127.0.0.1:11434/v1" />
-            </label>
-            <label>Model
-              <input id="llm-model" type="text" value="qwen2.5:1.5b" />
-            </label>
-            <label>Key
-              <input id="llm-key" type="password" autocomplete="off" />
-            </label>
-          </div>
-        </div>
-        <div id="status"></div>
-        <div id="answer" class="answer">Ask something after indexing.</div>
-        <div id="sources"></div>
-        <details>
-          <summary>Request sent to the model</summary>
-          <pre id="payload">—</pre>
+        <details class="indexed">
+          <summary id="count">Nothing added yet</summary>
+          <div class="indexed-list" id="files"></div>
         </details>
       </section>
-    </div>
+
+      <section class="panel">
+        <div class="step"><span class="n">2</span><h2>Ask anything</h2></div>
+        <p class="blurb">Try “my trip to Italy in 2019”, a person’s name, or what a photo was about.</p>
+
+        <div class="ask-box">
+          <textarea id="question" placeholder="What do you want to find?"></textarea>
+          <div class="ask-row">
+            <button class="primary" id="ask-btn" type="button">Find answers</button>
+            <span class="count-pill" id="ready-pill">Add files first</span>
+          </div>
+          <div id="status"></div>
+          <div id="answer" class="answer empty">Your answer will show up here.</div>
+          <div class="hits" id="sources"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script>
     const logEl = document.querySelector("#log");
     const filesEl = document.querySelector("#files");
     const countEl = document.querySelector("#count");
+    const readyPill = document.querySelector("#ready-pill");
     const answerEl = document.querySelector("#answer");
     const sourcesEl = document.querySelector("#sources");
-    const payloadEl = document.querySelector("#payload");
     const statusEl = document.querySelector("#status");
     const indexFilesBtn = document.querySelector("#index-files-btn");
     const indexFolderBtn = document.querySelector("#index-folder-btn");
     const askBtn = document.querySelector("#ask-btn");
-    const llmSettings = document.querySelector("#llm-settings");
-    const rootSelect = document.querySelector("#root-select");
-    const folderJump = document.querySelector("#folder-jump");
+    const rootsEl = document.querySelector("#roots");
     const folderList = document.querySelector("#folder-list");
     const fileList = document.querySelector("#file-list");
     const crumbs = document.querySelector("#crumbs");
     const upBtn = document.querySelector("#up-btn");
     const selCount = document.querySelector("#sel-count");
 
-    let mode = "local";
     let poll = null;
     let currentPath = "";
     let parentPath = null;
     let currentFolders = [];
+    let currentRoots = [];
+    let indexedCount = 0;
 
     const saved = JSON.parse(localStorage.getItem("local-files-ui") || "{}");
-    if (saved.base) document.querySelector("#llm-base").value = saved.base;
-    if (saved.model) document.querySelector("#llm-model").value = saved.model;
 
     function saveSettings() {
-      localStorage.setItem("local-files-ui", JSON.stringify({
-        browsePath: currentPath,
-        base: document.querySelector("#llm-base").value,
-        model: document.querySelector("#llm-model").value,
-      }));
+      localStorage.setItem("local-files-ui", JSON.stringify({ browsePath: currentPath }));
     }
-
-    function setMode(next) {
-      mode = next;
-      document.querySelector("#mode-local").setAttribute("aria-pressed", String(next === "local"));
-      document.querySelector("#mode-llm").setAttribute("aria-pressed", String(next === "llm"));
-      llmSettings.hidden = next !== "llm";
-    }
-    document.querySelector("#mode-local").onclick = () => setMode("local");
-    document.querySelector("#mode-llm").onclick = () => setMode("llm");
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, ch => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[ch]));
-    }
-
-    function shortWhen(value) {
-      if (!value) return "";
-      return String(value).slice(0, 10);
     }
 
     function formatSize(bytes) {
@@ -550,9 +544,27 @@
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    function kindIcon(kind) {
+      if (kind === "image") return "🖼";
+      if (kind === "video") return "🎬";
+      if (kind === "pdf") return "📄";
+      if (kind === "docx") return "📝";
+      return "📎";
+    }
+
     function updateSelCount() {
-      const n = [...fileList.selectedOptions].length;
-      selCount.textContent = n ? `${n} file${n === 1 ? "" : "s"} selected` : "";
+      const n = fileList.querySelectorAll("input[type=checkbox]:checked").length;
+      selCount.textContent = n ? `${n} selected` : "";
+    }
+
+    function renderRoots(activePath) {
+      rootsEl.innerHTML = currentRoots.map(root => {
+        const on = activePath === root.path || activePath.startsWith(root.path + "/");
+        return `<button type="button" class="chip" data-path="${escapeHtml(root.path)}" aria-pressed="${on}">${escapeHtml(root.label)}</button>`;
+      }).join("");
+      rootsEl.querySelectorAll(".chip").forEach(btn => {
+        btn.onclick = () => openDir(btn.dataset.path);
+      });
     }
 
     async function openDir(path) {
@@ -560,77 +572,77 @@
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        logEl.textContent = err.detail || "Could not open folder.";
+        logEl.textContent = err.detail || "Could not open that folder.";
         return;
       }
       const data = await res.json();
       currentPath = data.path;
       parentPath = data.parent;
       currentFolders = data.folders || [];
-      crumbs.textContent = data.path;
+      currentRoots = data.roots || currentRoots;
+      crumbs.textContent = friendlyPath(data.path);
+      crumbs.title = data.path;
       upBtn.disabled = !data.parent;
-
-      rootSelect.innerHTML = (data.roots || []).map(root =>
-        `<option value="${escapeHtml(root.path)}">${escapeHtml(root.label)}</option>`
-      ).join("");
-      const match = (data.roots || []).find(root => data.path === root.path || data.path.startsWith(root.path + "/"));
-      if (match) rootSelect.value = match.path;
-
-      folderJump.innerHTML = [
-        `<option value="${escapeHtml(data.path)}">.</option>`,
-        ...currentFolders.map(folder =>
-          `<option value="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}/</option>`
-        ),
-      ].join("");
+      renderRoots(data.path);
 
       folderList.innerHTML = currentFolders.length
-        ? currentFolders.map(folder =>
-            `<option value="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}/</option>`
-          ).join("")
-        : `<option disabled>(no subfolders)</option>`;
+        ? currentFolders.map(folder => `
+            <button type="button" class="item" data-path="${escapeHtml(folder.path)}">
+              <span class="ico">📁</span>
+              <span class="txt">${escapeHtml(folder.name)}</span>
+            </button>`).join("")
+        : `<div class="item"><span class="txt" style="color:var(--mute)">No folders here</span></div>`;
+
+      folderList.querySelectorAll("button.item").forEach(btn => {
+        btn.onclick = () => openDir(btn.dataset.path);
+      });
 
       fileList.innerHTML = (data.files || []).length
-        ? data.files.map(file =>
-            `<option value="${escapeHtml(file.path)}">${escapeHtml(file.name)}  ·  ${escapeHtml(file.kind)}  ·  ${formatSize(file.size)}</option>`
-          ).join("")
-        : `<option disabled>(no indexable files here)</option>`;
+        ? data.files.map(file => `
+            <label class="item">
+              <input type="checkbox" value="${escapeHtml(file.path)}" />
+              <span class="ico">${kindIcon(file.kind)}</span>
+              <span class="txt">${escapeHtml(file.name)}
+                <div class="sub">${escapeHtml(niceKind(file.kind))} · ${formatSize(file.size)}</div>
+              </span>
+            </label>`).join("")
+        : `<div class="item"><span class="txt" style="color:var(--mute)">No files to add here</span></div>`;
 
+      fileList.querySelectorAll("input").forEach(box => box.addEventListener("change", updateSelCount));
       updateSelCount();
       saveSettings();
     }
 
-    rootSelect.onchange = () => openDir(rootSelect.value);
-    folderJump.onchange = () => {
-      if (folderJump.value) openDir(folderJump.value);
-    };
-    upBtn.onclick = () => {
-      if (parentPath) openDir(parentPath);
-    };
-    folderList.ondblclick = () => {
-      const option = folderList.selectedOptions[0];
-      if (option && option.value && !option.disabled) openDir(option.value);
-    };
-    fileList.addEventListener("change", updateSelCount);
+    function friendlyPath(path) {
+      const home = (currentRoots.find(r => r.label === "Home") || {}).path;
+      if (home && path.startsWith(home)) {
+        const rest = path.slice(home.length).replace(/^\/+/, "");
+        return rest ? `Home / ${rest.split("/").join(" / ")}` : "Home";
+      }
+      return path;
+    }
+
+    function niceKind(kind) {
+      return ({ image: "Photo", video: "Video", pdf: "PDF", docx: "Document", text: "Note" }[kind]) || kind;
+    }
+
+    upBtn.onclick = () => { if (parentPath) openDir(parentPath); };
 
     async function loadFiles() {
       const res = await fetch("/api/documents");
       const data = await res.json();
-      countEl.textContent = data.files.length ? `${data.files.length} files` : "";
-      if (!data.files.length) {
-        filesEl.className = "list empty";
-        filesEl.textContent = "Nothing indexed yet.";
+      indexedCount = data.files.length;
+      if (!indexedCount) {
+        countEl.textContent = "Nothing added yet";
+        readyPill.textContent = "Add files first";
+        filesEl.innerHTML = "";
         return;
       }
-      filesEl.className = "list";
-      filesEl.innerHTML = data.files.map(file => {
-        const place = [file.city, file.country].filter(Boolean).join(", ");
-        const bits = [file.kind, place, file.roles].filter(Boolean);
-        return `<article class="item">
-          <div class="name">${escapeHtml(file.name)}</div>
-          <div class="when">${escapeHtml(shortWhen(file.captured_at))}</div>
-          <div class="meta">${escapeHtml(bits.join(" · "))}</div>
-        </article>`;
-      }).join("");
+      countEl.textContent = `${indexedCount} file${indexedCount === 1 ? "" : "s"} ready to search`;
+      readyPill.textContent = `${indexedCount} ready`;
+      filesEl.innerHTML = data.files.map(file =>
+        `<div title="${escapeHtml(file.path)}">${escapeHtml(file.name)}</div>`
+      ).join("");
     }
 
     function setIndexing(busy) {
@@ -641,7 +653,9 @@
     async function pollJob() {
       const res = await fetch("/api/job");
       const job = await res.json();
-      logEl.textContent = (job.log || []).join("\n") || "Ready.";
+      const lines = job.log || [];
+      const last = lines[lines.length - 1] || "Ready when you are.";
+      logEl.textContent = last.replace(/^Reading /, "Looking at ").replace(/^Selected /, "Preparing ").replace(/^Done\. /, "Done — ");
       setIndexing(job.state === "running");
       if (job.state === "running") return;
       clearInterval(poll);
@@ -652,6 +666,7 @@
     async function startIndex(body) {
       saveSettings();
       setIndexing(true);
+      logEl.textContent = "Adding to your shelf…";
       const res = await fetch("/api/index", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -659,7 +674,7 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        logEl.textContent = err.detail || "Could not start indexing.";
+        logEl.textContent = err.detail || "Could not add those files.";
         setIndexing(false);
         return;
       }
@@ -669,18 +684,14 @@
     }
 
     indexFilesBtn.onclick = () => {
-      const paths = [...fileList.selectedOptions]
-        .map(option => option.value)
-        .filter(value => value && !optionDisabled(optionByValue(fileList, value)));
-      const usable = [...fileList.selectedOptions]
-        .filter(option => !option.disabled && option.value)
-        .map(option => option.value);
+      const usable = [...fileList.querySelectorAll("input[type=checkbox]:checked")].map(el => el.value);
       if (!usable.length) {
-        logEl.textContent = "Select one or more files first.";
+        logEl.textContent = "Tick one or more files first.";
         return;
       }
       startIndex({ paths: usable });
     };
+
     indexFolderBtn.onclick = () => {
       if (!currentPath) {
         logEl.textContent = "Open a folder first.";
@@ -689,60 +700,66 @@
       startIndex({ path: currentPath });
     };
 
-    function optionByValue(select, value) {
-      return [...select.options].find(option => option.value === value);
-    }
-    function optionDisabled(option) {
-      return !option || option.disabled;
-    }
-
     askBtn.onclick = async () => {
+      const question = document.querySelector("#question").value.trim();
+      if (!question) {
+        answerEl.className = "answer empty";
+        answerEl.textContent = "Type a question first.";
+        return;
+      }
       saveSettings();
       askBtn.disabled = true;
       statusEl.innerHTML = "";
+      answerEl.className = "answer empty";
+      answerEl.textContent = "Looking…";
+      sourcesEl.innerHTML = "";
       const res = await fetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: document.querySelector("#question").value,
-          mode,
-          kind: document.querySelector("#kind").value,
-          country: document.querySelector("#country").value,
-          city: document.querySelector("#city").value,
-          year: document.querySelector("#year").value,
-          llm_base_url: document.querySelector("#llm-base").value,
-          llm_model: document.querySelector("#llm-model").value,
-          llm_api_key: document.querySelector("#llm-key").value,
+          question,
+          mode: "local",
+          kind: "any",
+          country: "",
+          city: "",
+          year: "",
+          llm_base_url: "http://127.0.0.1:11434/v1",
+          llm_model: "qwen2.5:1.5b",
+          llm_api_key: "",
         }),
       });
       askBtn.disabled = false;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        answerEl.textContent = err.detail || "Query failed.";
+        answerEl.className = "answer";
+        answerEl.textContent = err.detail || "Something went wrong.";
         return;
       }
       const data = await res.json();
-      if (data.llm_error) {
-        statusEl.innerHTML = `<div class="banner">Model call failed — showing passages instead.</div>`;
-      }
-      answerEl.textContent = data.answer || "";
+      answerEl.className = "answer";
+      answerEl.textContent = data.answer || "Nothing clear came back.";
       sourcesEl.innerHTML = (data.sources || []).map((hit, i) => {
-        const place = [hit.city, hit.country].filter(Boolean).join(", ") || "—";
-        return `<article class="hit">
-          <h3>${i + 1}. ${escapeHtml(hit.path.split("/").pop())}</h3>
-          <div class="meta">${escapeHtml(hit.kind)} · ${escapeHtml(hit.captured_at || "—")} · ${escapeHtml(place)}${hit.roles ? " · " + escapeHtml(hit.roles) : ""}</div>
-          <p>${escapeHtml(hit.text.slice(0, 620))}</p>
+        const name = (hit.path || hit.name || hit.entry_id || "Result").toString().split("/").pop();
+        const place = [hit.city, hit.country].filter(Boolean).join(", ");
+        const kind = niceKind(hit.kind || hit.source_type || "");
+        const meta = [kind, place, hit.roles].filter(Boolean).join(" · ");
+        const text = (hit.text || hit.question || "").slice(0, 420);
+        return `<article class="hit" style="animation-delay:${i * 40}ms">
+          <h3>${i + 1}. ${escapeHtml(name)}</h3>
+          <div class="meta">${escapeHtml(meta || "From your files")}</div>
+          <p>${escapeHtml(text)}</p>
         </article>`;
       }).join("");
-      payloadEl.textContent = JSON.stringify(data.llm_request, null, 2);
     };
 
     async function bootBrowser() {
       try {
         const res = await fetch("/api/browse/roots");
         const data = await res.json();
-        const docs = (data.roots || []).find(root => root.label === "Documents");
-        await openDir(saved.browsePath || (docs && docs.path) || null);
+        currentRoots = data.roots || [];
+        const docs = currentRoots.find(root => root.label === "Documents");
+        const pics = currentRoots.find(root => root.label === "Pictures");
+        await openDir(saved.browsePath || (docs && docs.path) || (pics && pics.path) || null);
       } catch (err) {
         await openDir(null);
       }

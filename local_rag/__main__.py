@@ -1,4 +1,4 @@
-"""Command line: index selected files or a folder, ask, or serve the UI."""
+"""Command line: index, ask (verified), eval, or serve."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ import argparse
 import json
 from pathlib import Path
 
-from local_rag.answer import local_preview, retrieve
+from local_rag.answer import ask_verified, local_preview
 from local_rag.pipeline import index_folder, index_paths
+from local_rag.settings import EMBEDDING_CANDIDATES
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Local folder RAG")
+    parser = argparse.ArgumentParser(description="Local hybrid retrieval")
     sub = parser.add_subparsers(dest="command", required=True)
 
     index = sub.add_parser("index", help="Index selected files or a folder")
@@ -20,14 +21,17 @@ def main():
     index.add_argument("--max-files", type=int, default=400)
     index.add_argument("--purge-missing", action="store_true")
 
-    ask = sub.add_parser("ask", help="Query the index and print the local preview")
+    ask = sub.add_parser("ask", help="Verified multi-stage retrieval (no LLM)")
     ask.add_argument("question")
-    ask.add_argument("--k", type=int, default=8)
-    ask.add_argument("--kind", default=None)
-    ask.add_argument("--country", default=None)
-    ask.add_argument("--year", default=None)
-    ask.add_argument("--city", default=None)
+    ask.add_argument("--k", type=int, default=5)
+    ask.add_argument("--session-id", default=None)
     ask.add_argument("--json", action="store_true")
+
+    ev = sub.add_parser("eval", help="Run retrieval eval against the sample set")
+    ev.add_argument("--path", default=None)
+
+    bench = sub.add_parser("benchmark-models", help="Print embedding candidates to benchmark")
+    bench.add_argument("--download", action="store_true", help="Attempt to load each candidate")
 
     serve = sub.add_parser("serve", help="Start the local web UI")
     serve.add_argument("--host", default="127.0.0.1")
@@ -49,18 +53,31 @@ def main():
         print(json.dumps(stats))
         return
     if args.command == "ask":
-        hits = retrieve(
-            args.question,
-            k=args.k,
-            kind=args.kind,
-            country=args.country,
-            year=args.year,
-            city=args.city,
-        )
+        result = ask_verified(args.question, k=args.k, session_id=args.session_id)
         if args.json:
-            print(json.dumps({"answer": local_preview(args.question, hits), "sources": hits}, indent=2))
+            print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            print(local_preview(args.question, hits))
+            print(local_preview(args.question, result=result))
+        return
+    if args.command == "eval":
+        from local_rag.eval_harness import run_eval
+
+        report = run_eval(Path(args.path) if args.path else None)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    if args.command == "benchmark-models":
+        print(json.dumps(EMBEDDING_CANDIDATES, indent=2))
+        if args.download:
+            from transformers import AutoModel, AutoTokenizer
+
+            for key, meta in EMBEDDING_CANDIDATES.items():
+                mid = meta["id"]
+                try:
+                    AutoTokenizer.from_pretrained(mid)
+                    AutoModel.from_pretrained(mid)
+                    print(f"OK {key}: {mid}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"FAIL {key}: {mid} — {exc}")
         return
     if args.command == "serve":
         import uvicorn

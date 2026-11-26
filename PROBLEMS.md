@@ -1,27 +1,38 @@
-# Obstacles and options
+# Product rules (locked)
 
-Access is treated as allowed for the user who runs the app. Selected-file indexing is v1; folder auto-crawl is the scale-up path.
+## 1. Access
 
-## Selected files → auto crawl
+Do not worry about passwords or permission prompts. Access is treated as **all allowed** for the user who runs the app.
 
-Indexing everything at once is slow (OCR on every photo). Starting with selected files keeps demos and reviews honest. Folder crawl is already implemented for later authorized auto-index.
+## 2. Indexing path
 
-## OCR is not raw storage
+**Now:** index selected files (and optional folder batches).  
+**Later:** scale to auto-crawl and index all possible files within authorization.  
+Folder crawl already exists as the scale-up path; selected files stay the default.
 
-Cafe names and street lines must become city/country/language/roles. Underscores in names (`Italy_2019_rome.mp4`) do not create word boundaries, so matching normalizes `_` and `-` to spaces. City lists are finite; unknown towns need the list extended or a geocoder later.
+## 3. OCR is interpreted, not stored raw
 
-## Video: metadata only
+OCR may return cafe names, street lines, and other text. That text is passed through an **interpret** step (`local_rag/place.py`) into:
 
-Frames and speech are out of scope. Container tags plus the file name carry date and place. A rename like `Italy_2019_rome_clip.mp4` is enough to join a trip query; a generic `clip.mp4` with no tags will not.
+- language cues  
+- country / city  
+- document roles (receipt, hotel, booking, memo, …)
 
-## Trip queries
+It is **not** “as-is” OCR sitting unused in the database. The searchable card carries the interpreted place and roles.
 
-“Italy 2019” should return receipt + hotel + memo + video, not three chunks of one note. Search keeps the best chunk per file first, then soft-boosts matching country/year/city. Document dates inside the text beat file modified time when present.
+## 4. Photos and videos for trip queries
 
-## Language cues
+**Videos:** do not open or watch frames / speech. Only container **metadata** (headers/tags) plus the file name are decoded into time/place signals.
 
-Shared words like “hotel” are weak. Language is guessed from stronger local cues, then from country when needed.
+**Photos:** OCR + EXIF/GPS when present, then the same place interpretation.
 
-## Model answers
+**Goal query:** *“my trip info to Italy in 2019”* should surface related **photo, video, receipt, hotel info, booking info, memo**, etc. — diversified across files (one strong chunk per file first), with soft boosts for matching country / year / city / trip roles.
 
-Small models can invent dates. Local preview always shows the passages. Prefer a model that stays on the sources when the model step is on.
+---
+
+# Practical obstacles
+
+- City lists are finite; unknown towns need list growth or a geocoder later.  
+- Underscores in names (`Italy_2019_rome.mp4`) are normalized to spaces for matching.  
+- Weak place words (conference cities, bare “note”) must not invent fake trips.  
+- Small generative models can invent dates; verified / local passages come first.  
