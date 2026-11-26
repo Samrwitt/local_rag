@@ -9,19 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg0: #1a3a32;
-      --bg1: #245247;
-      --paper: #f3efe6;
-      --paper-2: #fffdf8;
-      --ink: #1c2b26;
-      --mute: #5a6e66;
-      --line: #d9d2c4;
-      --leaf: #2f7a5e;
-      --leaf-deep: #215844;
-      --leaf-soft: #d8ebe2;
-      --glow: rgba(255, 214, 160, 0.22);
-      --shadow: 0 18px 50px rgba(18, 40, 34, 0.18);
-      --radius: 22px;
+      --bg0: #eef8f2;
+      --bg1: #f5fbf7;
+      --paper: #f9fdfb;
+      --paper-2: #ffffff;
+      --ink: #2a3d35;
+      --mute: #748780;
+      --line: #ddeee4;
+      --leaf: #9fd0b4;
+      --leaf-mid: #8bc4a4;
+      --leaf-deep: #5ea882;
+      --leaf-soft: #eef8f2;
+      --mint: #d5eedf;
+      --glow: rgba(191, 230, 208, 0.45);
+      --shadow: 0 12px 32px rgba(120, 160, 140, 0.08);
+      --radius: 20px;
     }
 
     * { box-sizing: border-box; }
@@ -32,9 +34,9 @@
       color: var(--ink);
       font: 16px/1.55 Nunito, "Segoe UI", sans-serif;
       background:
-        radial-gradient(900px 480px at 85% -10%, var(--glow), transparent 55%),
-        radial-gradient(700px 420px at 0% 100%, rgba(90, 160, 130, 0.18), transparent 50%),
-        linear-gradient(165deg, var(--bg0), var(--bg1) 45%, #17352e);
+        radial-gradient(900px 480px at 90% -5%, #ffffff, transparent 55%),
+        radial-gradient(700px 420px at 0% 100%, var(--glow), transparent 55%),
+        linear-gradient(180deg, #f7fcf9 0%, var(--bg0) 45%, #eef8f2 100%);
     }
 
     .shell {
@@ -44,52 +46,56 @@
     }
 
     .hero {
-      color: #f6f1e7;
-      margin-bottom: 28px;
-      animation: rise 0.7s ease both;
+      color: var(--ink);
+      margin-bottom: 24px;
+      animation: rise 0.65s ease both;
     }
 
     .hero .mark {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
+      color: var(--leaf-deep);
+      font-weight: 700;
     }
 
     .hero .dot {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: #f0c56d;
-      box-shadow: 0 0 0 6px rgba(240, 197, 109, 0.18);
+      background: var(--leaf);
+      box-shadow: 0 0 0 6px rgba(124, 188, 154, 0.25);
     }
 
     .hero h1 {
       margin: 0;
       font-family: Fraunces, Georgia, serif;
       font-weight: 650;
-      font-size: clamp(2.4rem, 7vw, 4rem);
+      font-size: clamp(2.2rem, 6.5vw, 3.6rem);
       letter-spacing: -0.03em;
-      line-height: 0.95;
+      line-height: 0.98;
+      color: #2a463a;
     }
 
     .hero p {
-      margin: 14px 0 0;
+      margin: 12px 0 0;
       max-width: 28rem;
-      color: rgba(246, 241, 231, 0.78);
+      color: var(--mute);
       font-size: 1.05rem;
     }
 
     .stage {
-      background: var(--paper);
-      border-radius: calc(var(--radius) + 6px);
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 4px);
       box-shadow: var(--shadow);
       overflow: hidden;
-      animation: rise 0.85s ease 0.08s both;
+      animation: rise 0.8s ease 0.06s both;
     }
 
     .panel {
-      padding: 28px 28px 24px;
+      padding: 26px 26px 22px;
       background: var(--paper-2);
     }
 
@@ -102,170 +108,71 @@
       display: flex;
       align-items: baseline;
       gap: 12px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .step .n {
       font-family: Fraunces, Georgia, serif;
-      font-size: 1.35rem;
-      color: var(--leaf);
+      font-size: 1.3rem;
+      color: var(--leaf-mid);
       font-weight: 650;
     }
 
     .step h2 {
       margin: 0;
       font-family: Fraunces, Georgia, serif;
-      font-size: 1.55rem;
+      font-size: 1.45rem;
       font-weight: 650;
       letter-spacing: -0.02em;
+      color: #2f4a3d;
     }
 
     .blurb {
-      margin: 0 0 18px;
+      margin: 0 0 16px;
       color: var(--mute);
     }
 
-    .place-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-
-    .chip {
-      border: 1px solid transparent;
-      background: var(--leaf-soft);
-      color: var(--leaf-deep);
-      border-radius: 999px;
-      padding: 8px 14px;
-      font: inherit;
-      font-weight: 700;
-      font-size: 0.92rem;
-      cursor: pointer;
-      transition: transform 0.15s ease, background 0.15s ease;
-    }
-
-    .chip:hover { transform: translateY(-1px); }
-    .chip[aria-pressed="true"] {
-      background: var(--leaf);
-      color: #f7fff9;
-    }
-
-    .nav-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    .path-pill {
-      flex: 1;
-      min-width: 0;
-      padding: 10px 14px;
-      border-radius: 14px;
-      background: #efe9dc;
-      color: var(--mute);
-      font-size: 0.88rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .ghost {
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--ink);
-      border-radius: 14px;
-      padding: 10px 14px;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .ghost:disabled { opacity: 0.4; cursor: default; }
-
-    .browser {
+    .pickers {
       display: grid;
-      grid-template-columns: 0.9fr 1.2fr;
       gap: 12px;
+      max-width: 520px;
     }
 
-    @media (max-width: 720px) {
-      .browser { grid-template-columns: 1fr; }
-      .panel { padding: 22px 18px; }
-    }
-
-    .col {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: #fff;
-      min-height: 220px;
-      max-height: 280px;
-      overflow: auto;
-    }
-
-    .col h3 {
-      margin: 0;
-      padding: 10px 14px;
-      font-size: 0.78rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--mute);
-      border-bottom: 1px solid var(--line);
-      position: sticky;
-      top: 0;
-      background: #fff;
-    }
-
-    .col button.item,
-    .col label.item {
-      display: flex;
-      width: 100%;
-      gap: 10px;
-      align-items: center;
-      text-align: left;
-      border: 0;
-      border-bottom: 1px solid #f0ebe1;
-      background: transparent;
-      padding: 11px 14px;
-      font: inherit;
-      color: var(--ink);
-      cursor: pointer;
-    }
-
-    .col button.item:hover,
-    .col label.item:hover { background: #f7f3ea; }
-
-    .col .item .ico {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
+    .field {
       display: grid;
-      place-items: center;
-      flex: 0 0 auto;
-      background: var(--leaf-soft);
-      color: var(--leaf-deep);
-      font-size: 0.85rem;
+      gap: 6px;
     }
 
-    .col .item .txt {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .field span {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--mute);
+    }
+
+    .field select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
       font-weight: 600;
     }
 
-    .col .item .sub {
-      color: var(--mute);
-      font-size: 0.8rem;
-      font-weight: 400;
+    .field select:focus {
+      outline: 3px solid rgba(124, 188, 154, 0.28);
+      border-color: var(--leaf);
     }
 
-    .col label.item input {
-      accent-color: var(--leaf);
-      width: 16px;
-      height: 16px;
+    .path-note {
+      color: var(--mute);
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 720px) {
+      .panel { padding: 20px 16px; }
     }
 
     .actions {
@@ -284,12 +191,12 @@
       font-weight: 700;
       cursor: pointer;
       background: var(--leaf);
-      color: #f4fff8;
-      box-shadow: 0 8px 20px rgba(47, 122, 94, 0.28);
+      color: #f7fff9;
+      box-shadow: 0 8px 18px rgba(104, 173, 138, 0.28);
       transition: transform 0.15s ease, background 0.15s ease;
     }
 
-    .primary:hover { background: var(--leaf-deep); transform: translateY(-1px); }
+    .primary:hover { background: var(--leaf-mid); transform: translateY(-1px); }
     .primary:disabled { opacity: 0.55; cursor: wait; transform: none; }
 
     .soft {
@@ -309,10 +216,7 @@
       font-size: 0.92rem;
     }
 
-    .ask-box {
-      display: grid;
-      gap: 12px;
-    }
+    .ask-box { display: grid; gap: 12px; }
 
     textarea {
       width: 100%;
@@ -325,11 +229,10 @@
       font-size: 1.05rem;
       background: #fff;
       color: var(--ink);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
     }
 
     textarea:focus {
-      outline: 3px solid rgba(47, 122, 94, 0.2);
+      outline: 3px solid rgba(124, 188, 154, 0.28);
       border-color: var(--leaf);
     }
 
@@ -365,6 +268,22 @@
 
     .answer.empty { color: var(--mute); }
 
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filters select {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 600;
+    }
+
     .hits { margin-top: 14px; display: grid; gap: 10px; }
 
     .hit {
@@ -372,7 +291,7 @@
       border-radius: 16px;
       background: #fff;
       border: 1px solid var(--line);
-      animation: rise 0.4s ease both;
+      animation: rise 0.35s ease both;
     }
 
     .hit h3 {
@@ -388,10 +307,51 @@
       margin-bottom: 6px;
     }
 
+    .hit .why {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 8px;
+    }
+
+    .hit .why span {
+      background: var(--leaf-soft);
+      color: var(--leaf-deep);
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
     .hit p {
       margin: 0;
       color: var(--ink);
       font-size: 0.95rem;
+    }
+
+    .hit .links {
+      margin-top: 8px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hit .links a {
+      color: var(--leaf-deep);
+      font-weight: 700;
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+
+    .hit .links a:hover { text-decoration: underline; }
+
+    .hit img.preview {
+      display: block;
+      max-width: 100%;
+      max-height: 160px;
+      margin: 8px 0 0;
+      border-radius: 12px;
+      object-fit: cover;
     }
 
     .indexed {
@@ -420,17 +380,11 @@
     .indexed-list div {
       padding: 8px 10px;
       border-radius: 10px;
-      background: #efe9dc;
+      background: var(--leaf-soft);
       font-size: 0.88rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .banner {
-      margin-top: 10px;
-      color: #8a3b32;
-      font-size: 0.92rem;
     }
 
     @keyframes rise {
@@ -444,51 +398,29 @@
     <header class="hero">
       <div class="mark"><span class="dot" aria-hidden="true"></span><span>Shelf</span></div>
       <h1>Your files,<br />easy to ask.</h1>
-      <p>Choose a folder or a few files, then ask in plain language — trips, notes, photos, whatever you saved.</p>
+      <p>Search in plain language — trips, notes, photos, whatever you saved. Add more files anytime below.</p>
     </header>
 
     <main class="stage">
       <section class="panel">
-        <div class="step"><span class="n">1</span><h2>Choose what to include</h2></div>
-        <p class="blurb">Start somewhere familiar. Open a folder, tick the files you want, or include everything in the folder.</p>
-
-        <div class="place-row" id="roots" role="group" aria-label="Places on this computer"></div>
-
-        <div class="nav-row">
-          <div class="path-pill" id="crumbs">Opening…</div>
-          <button class="ghost" id="up-btn" type="button">Go up</button>
-        </div>
-
-        <div class="browser">
-          <div class="col" id="folder-col">
-            <h3>Folders</h3>
-            <div id="folder-list"></div>
-          </div>
-          <div class="col" id="file-col">
-            <h3>Files</h3>
-            <div id="file-list"></div>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="primary" id="index-files-btn" type="button">Add selected files</button>
-          <button class="soft" id="index-folder-btn" type="button">Add this whole folder</button>
-          <span class="status" id="sel-count"></span>
-        </div>
-        <div class="status" id="log" style="margin-top:10px">Ready when you are.</div>
-
-        <details class="indexed">
-          <summary id="count">Nothing added yet</summary>
-          <div class="indexed-list" id="files"></div>
-        </details>
-      </section>
-
-      <section class="panel">
-        <div class="step"><span class="n">2</span><h2>Ask anything</h2></div>
-        <p class="blurb">Try “my trip to Italy in 2019”, a person’s name, or what a photo was about.</p>
+        <div class="step"><span class="n">1</span><h2>Ask anything</h2></div>
+        <p class="blurb">Try a name, a place, a year, or “my sample invoice”.</p>
 
         <div class="ask-box">
           <textarea id="question" placeholder="What do you want to find?"></textarea>
+          <div class="filters">
+            <select id="kind-filter" aria-label="File type">
+              <option value="any">All types</option>
+              <option value="image">Photos</option>
+              <option value="video">Videos</option>
+              <option value="pdf">PDFs</option>
+              <option value="docx">Documents</option>
+              <option value="text">Notes</option>
+            </select>
+            <select id="year-filter" aria-label="Year">
+              <option value="">Any year</option>
+            </select>
+          </div>
           <div class="ask-row">
             <button class="primary" id="ask-btn" type="button">Find answers</button>
             <span class="count-pill" id="ready-pill">Add files first</span>
@@ -497,6 +429,46 @@
           <div id="answer" class="answer empty">Your answer will show up here.</div>
           <div class="hits" id="sources"></div>
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="step"><span class="n">2</span><h2>Add files</h2></div>
+        <p class="blurb">Pick a place, then a folder, then a file — nothing lists until you choose.</p>
+
+        <div class="pickers">
+          <label class="field">
+            <span>Place</span>
+            <select id="place-select">
+              <option value="">Choose a place…</option>
+            </select>
+          </label>
+
+          <label class="field" id="folder-field" hidden>
+            <span>Folder</span>
+            <select id="folder-select">
+              <option value="">Choose a folder…</option>
+            </select>
+            <div class="path-note" id="crumbs"></div>
+          </label>
+
+          <label class="field" id="file-field" hidden>
+            <span>File</span>
+            <select id="file-select">
+              <option value="">Choose a file…</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions" id="add-actions" hidden>
+          <button class="primary" id="index-files-btn" type="button">Add this file</button>
+          <button class="soft" id="index-folder-btn" type="button">Add this whole folder</button>
+        </div>
+        <div class="status" id="log" style="margin-top:10px;margin-left:0">Ready when you are.</div>
+
+        <details class="indexed">
+          <summary id="count">Nothing added yet</summary>
+          <div class="indexed-list" id="files"></div>
+        </details>
       </section>
     </main>
   </div>
@@ -512,24 +484,26 @@
     const indexFilesBtn = document.querySelector("#index-files-btn");
     const indexFolderBtn = document.querySelector("#index-folder-btn");
     const askBtn = document.querySelector("#ask-btn");
-    const rootsEl = document.querySelector("#roots");
-    const folderList = document.querySelector("#folder-list");
-    const fileList = document.querySelector("#file-list");
+    const placeSelect = document.querySelector("#place-select");
+    const folderField = document.querySelector("#folder-field");
+    const folderSelect = document.querySelector("#folder-select");
+    const fileField = document.querySelector("#file-field");
+    const fileSelect = document.querySelector("#file-select");
     const crumbs = document.querySelector("#crumbs");
-    const upBtn = document.querySelector("#up-btn");
-    const selCount = document.querySelector("#sel-count");
+    const addActions = document.querySelector("#add-actions");
 
     let poll = null;
     let currentPath = "";
     let parentPath = null;
-    let currentFolders = [];
     let currentRoots = [];
     let indexedCount = 0;
+    let pendingFiles = [];
+    let suppressFolderChange = false;
 
     const saved = JSON.parse(localStorage.getItem("local-files-ui") || "{}");
 
     function saveSettings() {
-      localStorage.setItem("local-files-ui", JSON.stringify({ browsePath: currentPath }));
+      localStorage.setItem("local-files-ui", JSON.stringify({ browsePath: currentPath || "" }));
     }
 
     function escapeHtml(value) {
@@ -544,73 +518,41 @@
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    function kindIcon(kind) {
-      if (kind === "image") return "🖼";
-      if (kind === "video") return "🎬";
-      if (kind === "pdf") return "📄";
-      if (kind === "docx") return "📝";
-      return "📎";
+    function niceKind(kind) {
+      return ({ image: "Photo", video: "Video", pdf: "PDF", docx: "Document", text: "Note" }[kind]) || kind;
     }
 
-    function updateSelCount() {
-      const n = fileList.querySelectorAll("input[type=checkbox]:checked").length;
-      selCount.textContent = n ? `${n} selected` : "";
+    function hideFiles() {
+      fileField.hidden = true;
+      addActions.hidden = true;
+      fileSelect.innerHTML = `<option value="">Choose a file…</option>`;
+      pendingFiles = [];
     }
 
-    function renderRoots(activePath) {
-      rootsEl.innerHTML = currentRoots.map(root => {
-        const on = activePath === root.path || activePath.startsWith(root.path + "/");
-        return `<button type="button" class="chip" data-path="${escapeHtml(root.path)}" aria-pressed="${on}">${escapeHtml(root.label)}</button>`;
-      }).join("");
-      rootsEl.querySelectorAll(".chip").forEach(btn => {
-        btn.onclick = () => openDir(btn.dataset.path);
+    function hideFolderAndFiles() {
+      currentPath = "";
+      parentPath = null;
+      folderField.hidden = true;
+      folderSelect.innerHTML = `<option value="">Choose a folder…</option>`;
+      crumbs.textContent = "";
+      hideFiles();
+    }
+
+    function fillPlaces() {
+      placeSelect.innerHTML = `<option value="">Choose a place…</option>` +
+        currentRoots.map(root =>
+          `<option value="${escapeHtml(root.path)}">${escapeHtml(root.label)}</option>`
+        ).join("");
+    }
+
+    function matchPlace(path) {
+      let best = null;
+      currentRoots.forEach(root => {
+        if (path === root.path || (path || "").startsWith(root.path + "/")) {
+          if (!best || root.path.length > best.path.length) best = root;
+        }
       });
-    }
-
-    async function openDir(path) {
-      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
-      const res = await fetch(url);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        logEl.textContent = err.detail || "Could not open that folder.";
-        return;
-      }
-      const data = await res.json();
-      currentPath = data.path;
-      parentPath = data.parent;
-      currentFolders = data.folders || [];
-      currentRoots = data.roots || currentRoots;
-      crumbs.textContent = friendlyPath(data.path);
-      crumbs.title = data.path;
-      upBtn.disabled = !data.parent;
-      renderRoots(data.path);
-
-      folderList.innerHTML = currentFolders.length
-        ? currentFolders.map(folder => `
-            <button type="button" class="item" data-path="${escapeHtml(folder.path)}">
-              <span class="ico">📁</span>
-              <span class="txt">${escapeHtml(folder.name)}</span>
-            </button>`).join("")
-        : `<div class="item"><span class="txt" style="color:var(--mute)">No folders here</span></div>`;
-
-      folderList.querySelectorAll("button.item").forEach(btn => {
-        btn.onclick = () => openDir(btn.dataset.path);
-      });
-
-      fileList.innerHTML = (data.files || []).length
-        ? data.files.map(file => `
-            <label class="item">
-              <input type="checkbox" value="${escapeHtml(file.path)}" />
-              <span class="ico">${kindIcon(file.kind)}</span>
-              <span class="txt">${escapeHtml(file.name)}
-                <div class="sub">${escapeHtml(niceKind(file.kind))} · ${formatSize(file.size)}</div>
-              </span>
-            </label>`).join("")
-        : `<div class="item"><span class="txt" style="color:var(--mute)">No files to add here</span></div>`;
-
-      fileList.querySelectorAll("input").forEach(box => box.addEventListener("change", updateSelCount));
-      updateSelCount();
-      saveSettings();
+      return best;
     }
 
     function friendlyPath(path) {
@@ -622,11 +564,91 @@
       return path;
     }
 
-    function niceKind(kind) {
-      return ({ image: "Photo", video: "Video", pdf: "PDF", docx: "Document", text: "Note" }[kind]) || kind;
+    function showFileDropdown(files) {
+      pendingFiles = files || [];
+      fileField.hidden = false;
+      addActions.hidden = false;
+      fileSelect.innerHTML = `<option value="">Choose a file…</option>` +
+        (pendingFiles.length
+          ? pendingFiles.map(file =>
+              `<option value="${escapeHtml(file.path)}">${escapeHtml(file.name)} — ${escapeHtml(niceKind(file.kind))} · ${formatSize(file.size)}</option>`
+            ).join("")
+          : `<option value="" disabled>No files in this folder</option>`);
     }
 
-    upBtn.onclick = () => { if (parentPath) openDir(parentPath); };
+    async function openDir(path, { revealFiles = false } = {}) {
+      const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : "/api/browse";
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        logEl.textContent = err.detail || "Could not open that folder.";
+        return;
+      }
+      const data = await res.json();
+      currentPath = data.path;
+      parentPath = data.parent;
+      currentRoots = data.roots || currentRoots;
+
+      const place = matchPlace(data.path);
+      if (place) placeSelect.value = place.path;
+
+      folderField.hidden = false;
+      crumbs.textContent = friendlyPath(data.path);
+      crumbs.title = data.path;
+
+      const folders = data.folders || [];
+      const options = [`<option value="">Choose a folder…</option>`];
+      options.push(`<option value="__here__">Use this folder</option>`);
+      if (data.parent) {
+        options.push(`<option value="__up__">↑ Go up one folder</option>`);
+      }
+      folders.forEach(folder => {
+        options.push(`<option value="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</option>`);
+      });
+
+      suppressFolderChange = true;
+      folderSelect.innerHTML = options.join("");
+      folderSelect.value = revealFiles ? "__here__" : "";
+      suppressFolderChange = false;
+
+      if (revealFiles) {
+        showFileDropdown(data.files || []);
+      } else {
+        hideFiles();
+      }
+      saveSettings();
+    }
+
+    placeSelect.onchange = () => {
+      const path = placeSelect.value;
+      if (!path) {
+        hideFolderAndFiles();
+        saveSettings();
+        return;
+      }
+      openDir(path, { revealFiles: false });
+    };
+
+    folderSelect.onchange = () => {
+      if (suppressFolderChange) return;
+      const value = folderSelect.value;
+      if (!value) {
+        hideFiles();
+        return;
+      }
+      if (value === "__here__") {
+        fetch(`/api/browse?path=${encodeURIComponent(currentPath)}`)
+          .then(res => res.json())
+          .then(data => showFileDropdown(data.files || []))
+          .catch(() => { logEl.textContent = "Could not load files."; });
+        return;
+      }
+      if (value === "__up__") {
+        if (parentPath) openDir(parentPath, { revealFiles: false });
+        return;
+      }
+      openDir(value, { revealFiles: true });
+    };
 
     async function loadFiles() {
       const res = await fetch("/api/documents");
@@ -684,21 +706,31 @@
     }
 
     indexFilesBtn.onclick = () => {
-      const usable = [...fileList.querySelectorAll("input[type=checkbox]:checked")].map(el => el.value);
-      if (!usable.length) {
-        logEl.textContent = "Tick one or more files first.";
+      const path = fileSelect.value;
+      if (!path) {
+        logEl.textContent = "Choose a file from the dropdown first.";
         return;
       }
-      startIndex({ paths: usable });
+      startIndex({ paths: [path] });
     };
 
     indexFolderBtn.onclick = () => {
       if (!currentPath) {
-        logEl.textContent = "Open a folder first.";
+        logEl.textContent = "Choose a folder first.";
         return;
       }
       startIndex({ path: currentPath });
     };
+
+    const kindFilter = document.querySelector("#kind-filter");
+    const yearFilter = document.querySelector("#year-filter");
+    const thisYear = new Date().getFullYear();
+    for (let y = thisYear; y >= thisYear - 15; y -= 1) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = String(y);
+      yearFilter.appendChild(opt);
+    }
 
     askBtn.onclick = async () => {
       const question = document.querySelector("#question").value.trim();
@@ -719,10 +751,10 @@
         body: JSON.stringify({
           question,
           mode: "local",
-          kind: "any",
+          kind: kindFilter.value || "any",
           country: "",
           city: "",
-          year: "",
+          year: yearFilter.value || "",
           llm_base_url: "http://127.0.0.1:11434/v1",
           llm_model: "qwen2.5:1.5b",
           llm_api_key: "",
@@ -741,27 +773,41 @@
       sourcesEl.innerHTML = (data.sources || []).map((hit, i) => {
         const name = (hit.path || hit.name || hit.entry_id || "Result").toString().split("/").pop();
         const place = [hit.city, hit.country].filter(Boolean).join(", ");
+        const when = (hit.captured_at || "").slice(0, 10);
         const kind = niceKind(hit.kind || hit.source_type || "");
-        const meta = [kind, place, hit.roles].filter(Boolean).join(" · ");
+        const meta = [kind, place, when, hit.roles].filter(Boolean).join(" · ");
         const text = (hit.text || hit.question || "").slice(0, 420);
+        const why = (hit.match_reasons || []).map(r => `<span>${escapeHtml(r)}</span>`).join("");
+        const path = hit.path || "";
+        const open = path
+          ? `<div class="links">
+               <a href="/api/file?path=${encodeURIComponent(path)}" target="_blank" rel="noopener">Open file</a>
+             </div>`
+          : "";
+        const preview = (hit.kind === "image" && path)
+          ? `<img class="preview" src="/api/file?path=${encodeURIComponent(path)}" alt="" loading="lazy" />`
+          : "";
         return `<article class="hit" style="animation-delay:${i * 40}ms">
           <h3>${i + 1}. ${escapeHtml(name)}</h3>
           <div class="meta">${escapeHtml(meta || "From your files")}</div>
+          ${why ? `<div class="why">${why}</div>` : ""}
           <p>${escapeHtml(text)}</p>
+          ${preview}
+          ${open}
         </article>`;
       }).join("");
     };
 
     async function bootBrowser() {
+      hideFolderAndFiles();
       try {
         const res = await fetch("/api/browse/roots");
         const data = await res.json();
         currentRoots = data.roots || [];
-        const docs = currentRoots.find(root => root.label === "Documents");
-        const pics = currentRoots.find(root => root.label === "Pictures");
-        await openDir(saved.browsePath || (docs && docs.path) || (pics && pics.path) || null);
+        fillPlaces();
+        // Start with place only — never auto-show folders or files.
       } catch (err) {
-        await openDir(null);
+        placeSelect.innerHTML = `<option value="">Could not load places</option>`;
       }
     }
 

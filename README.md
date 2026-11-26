@@ -50,8 +50,18 @@ question
 
 Trip search keeps **one strong chunk per file** first so Italy 2019 can surface receipt + hotel + video + memo together.
 
+## Formats
+
+Text, PDF, DOCX, PPTX, XLSX, common images (incl. HEIC when tools available), common videos (metadata only).
+
+Indexing uses content hashing for duplicates, skips unchanged files, and continues when one file fails.
+
 ## Optional extras
 
 - Curated Am/En QA KB: `data/kb/curated_qa.json`  
-- Eval: `python3 -m local_rag eval`  
+- KB eval: `python3 -m local_rag eval`  
+- **Real-file search eval:** `python3 -m local_rag file-eval`  
+- Cross-file links: `python3 -m local_rag relations`  
 - Embedding candidates / reranker: see `local_rag/settings.py`  
+- Audit notes: `AUDIT.md` / `PROBLEMS.md`  
+

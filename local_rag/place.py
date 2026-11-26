@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from local_rag.evidence import attribute, pack_attributes
+
 # City → country. Enough for travel demos; extend as the corpus grows.
 CITY_COUNTRY = {
     "rome": "Italy",
@@ -213,6 +215,7 @@ class PlaceInfo:
     roles: list[str] = field(default_factory=list)
     place_source: str | None = None  # gps | text | both | path
     summary_lines: list[str] = field(default_factory=list)
+    enrichment: dict = field(default_factory=dict)
 
 
 def _searchable(text: str) -> str:
@@ -293,7 +296,86 @@ def interpret_place(
 
     info.language = _guess_language(lower, info.country)
     info.summary_lines = _summary(info)
+    info.enrichment = _enrichment_bundle(info, path_name=path_name, gps_country=gps_country)
     return info
+
+
+def _enrichment_bundle(info: PlaceInfo, *, path_name: str, gps_country: str | None) -> dict:
+    """Attach evidence, method, confidence, and observed/inferred flags."""
+    attrs = []
+    if info.country:
+        observed = info.place_source == "gps" or (gps_country and info.country == gps_country)
+        conf = 0.92 if info.place_source in {"gps", "both"} else 0.72 if info.place_source == "path" else 0.58
+        attrs.append(
+            attribute(
+                "country",
+                info.country,
+                method=f"place:{info.place_source or 'text'}",
+                confidence=conf,
+                observed=bool(observed),
+                evidence=path_name or (info.streets[0] if info.streets else ""),
+                alternatives=[],
+            )
+        )
+    if info.city:
+        conf = 0.8 if info.place_source in {"path", "both", "gps"} else 0.55
+        attrs.append(
+            attribute(
+                "city",
+                info.city,
+                method=f"place:{info.place_source or 'text'}",
+                confidence=conf,
+                observed=False,
+                evidence=path_name,
+            )
+        )
+    if info.language:
+        # Country→language defaults are inferred and weaker than lexical cues.
+        blob = _searchable(f"{path_name}\n" + " ".join(info.summary_lines))
+        lexical_hits = 0
+        for name, patterns in LANG_HINTS:
+            if name != info.language:
+                continue
+            lexical_hits = sum(1 for pat in patterns if re.search(pat, blob, re.I))
+        from_country_only = lexical_hits == 0
+        attrs.append(
+            attribute(
+                "language",
+                info.language,
+                method="lang_hints" if not from_country_only else "country_default",
+                confidence=0.45 if from_country_only else 0.65,
+                observed=False,
+                evidence="language cues in text/path",
+            )
+        )
+    for role in info.roles:
+        attrs.append(
+            attribute(
+                f"role:{role}",
+                role,
+                method="role_pattern",
+                confidence=0.7,
+                observed=True,
+                evidence=path_name,
+            )
+        )
+    for street in info.streets[:3]:
+        attrs.append(
+            attribute(
+                "street",
+                street,
+                method="street_pattern",
+                confidence=0.75,
+                observed=True,
+                evidence=street,
+            )
+        )
+    return {
+        "attributes": pack_attributes(attrs),
+        "place_source": info.place_source,
+        "venues": list(info.venues),
+        "streets": list(info.streets),
+    }
 
 
 def parse_trip_query(question: str) -> dict:

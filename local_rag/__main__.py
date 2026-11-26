@@ -30,6 +30,12 @@ def main():
     ev = sub.add_parser("eval", help="Run retrieval eval against the sample set")
     ev.add_argument("--path", default=None)
 
+    fe = sub.add_parser("file-eval", help="Eval personal-file search against real indexed files")
+    fe.add_argument("--path", default=None)
+
+    rel = sub.add_parser("relations", help="Discover and store cross-file relationships")
+    rel.add_argument("--max-files", type=int, default=400)
+
     bench = sub.add_parser("benchmark-models", help="Print embedding candidates to benchmark")
     bench.add_argument("--download", action="store_true", help="Attempt to load each candidate")
 
@@ -64,6 +70,21 @@ def main():
 
         report = run_eval(Path(args.path) if args.path else None)
         print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    if args.command == "file-eval":
+        from local_rag.file_eval import run_file_eval
+
+        report = run_file_eval(Path(args.path) if args.path else None)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    if args.command == "relations":
+        from local_rag import relations, store
+
+        found = relations.discover_relations(max_files=args.max_files)
+        print(json.dumps({"relations": len(found), "stored": store.relation_count()}, indent=2))
+        for item in found[:15]:
+            print(f"{item.score:.2f} {item.relation_type}: {Path(item.path_a).name} ↔ {Path(item.path_b).name}")
+            print("   ", "; ".join(item.reasons))
         return
     if args.command == "benchmark-models":
         print(json.dumps(EMBEDDING_CANDIDATES, indent=2))

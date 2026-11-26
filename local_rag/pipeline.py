@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -13,7 +15,7 @@ from local_rag.settings import MODEL_ID
 from local_rag import store
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".cache"}
-EXTRACTOR_REV = "9"
+EXTRACTOR_REV = "10"
 MAX_FILE_BYTES = 80 * 1024 * 1024
 MAX_CHUNKS = 40
 
@@ -42,9 +44,30 @@ def crawl(root: Path, max_files: int = 400) -> list[Path]:
     return found
 
 
+def content_hash(path: Path, sample_bytes: int = 2_000_000) -> str:
+    """SHA-256 over head+tail samples — detects duplicates without full read of huge files."""
+    digest = hashlib.sha256()
+    size = path.stat().st_size
+    digest.update(str(size).encode("ascii"))
+    with path.open("rb") as handle:
+        head = handle.read(sample_bytes)
+        digest.update(head)
+        if size > sample_bytes * 2:
+            handle.seek(max(0, size - sample_bytes))
+            digest.update(handle.read(sample_bytes))
+        elif size > sample_bytes:
+            digest.update(handle.read())
+    return digest.hexdigest()
+
+
 def fingerprint(path: Path) -> str:
+    """Incremental skip key: size + mtime + model + extractor + content sample hash."""
     stat = path.stat()
-    return f"{stat.st_size}:{stat.st_mtime_ns}:{MODEL_ID}:{EXTRACTOR_REV}"
+    try:
+        ch = content_hash(path)
+    except OSError:
+        ch = "unreadable"
+    return f"{stat.st_size}:{stat.st_mtime_ns}:{MODEL_ID}:{EXTRACTOR_REV}:{ch[:16]}"
 
 
 def index_paths(paths: list[Path | str], on_event=None) -> dict:
@@ -163,6 +186,11 @@ def index_folder(root: Path | str, max_files: int = 400, on_event=None, purge_mi
 
 def _index_one(path: Path, fp: str) -> None:
     extracted = extract(path)
+    try:
+        ch = content_hash(path)
+    except OSError:
+        ch = None
+    extracted.content_hash = ch
     pieces = []
     card = metadata_card(
         path.name,
@@ -210,6 +238,10 @@ def _index_one(path: Path, fp: str) -> None:
     warnings = list(extracted.warnings)
     if truncated:
         warnings.append(f"kept the first {MAX_CHUNKS} chunks")
+    if ch:
+        dupes = [p for p in store.files_by_content_hash(ch) if p != str(path)]
+        if dupes:
+            warnings.append(f"duplicate content also at {Path(dupes[0]).name}")
     preview_source = extracted.interpreted or body or card
     store.replace_file(
         {
@@ -230,6 +262,10 @@ def _index_one(path: Path, fp: str) -> None:
             "ocr_used": 1 if extracted.ocr_used else 0,
             "warning": "; ".join(warnings),
             "preview": preview_source[:280],
+            "content_hash": ch,
+            "enrichment_json": json.dumps(extracted.enrichment or {}, ensure_ascii=False),
+            "device": extracted.device,
+            "duration": extracted.duration,
         },
         chunk_rows,
     )

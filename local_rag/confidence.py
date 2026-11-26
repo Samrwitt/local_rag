@@ -29,7 +29,10 @@ def score_candidate(candidate: dict, query_lang: str) -> float:
         dense = max(0.0, float(candidate.get("dense_score") or 0.0))
         legacy = float(candidate.get("legacy_score") or 0.0)
         bm25 = min(1.0, float(candidate.get("bm25_score") or 0.0) / 20.0)
+        name_overlap = float(candidate.get("name_overlap") or 0.0)
         conf = 0.55 * dense + 0.35 * min(1.0, legacy) + 0.10 * bm25
+        if name_overlap >= 0.5:
+            conf = max(conf, 0.42 + 0.4 * name_overlap)
         if candidate.get("rerank_score") is not None:
             conf = 0.7 * conf + 0.3 * (1 / (1 + pow(2.718281828, -float(candidate["rerank_score"]))))
         return max(0.0, min(1.0, conf))

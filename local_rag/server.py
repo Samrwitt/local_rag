@@ -85,6 +85,25 @@ def documents():
     return {"files": store.list_files()}
 
 
+@app.get("/api/file")
+def open_file(path: str):
+    """Serve an original local file for preview / download (host user access)."""
+    target = Path(path).expanduser()
+    if not target.is_absolute():
+        raise HTTPException(status_code=400, detail="Absolute path required")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(target, filename=target.name)
+
+
+@app.post("/api/relations/rebuild")
+def rebuild_relations(max_files: int = 400):
+    from local_rag import relations
+
+    found = relations.discover_relations(max_files=max_files)
+    return {"relations": len(found), "stored": store.relation_count()}
+
+
 @app.get("/api/browse/roots")
 def browse_roots():
     return {"roots": roots()}
@@ -153,7 +172,15 @@ def query(body: QueryRequest):
     if not question:
         raise HTTPException(status_code=400, detail="Question is empty")
     kind = None if not body.kind or body.kind == "any" else body.kind
-    result = ask_verified(question, k=body.k, session_id=body.session_id, kind=kind)
+    result = ask_verified(
+        question,
+        k=body.k,
+        session_id=body.session_id,
+        kind=kind,
+        country=body.country or None,
+        year=body.year or None,
+        city=body.city or None,
+    )
     hits = result.get("sources") or []
     request_body = llm_request_body(question, hits, body.llm_model)
     payload = {

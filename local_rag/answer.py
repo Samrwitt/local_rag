@@ -37,8 +37,19 @@ def ask_verified(
     k: int = 5,
     session_id: str | None = None,
     kind: str | None = None,
+    country: str | None = None,
+    year: str | None = None,
+    city: str | None = None,
 ) -> dict:
-    return retrieve_verified(question, session_id=session_id, k=k, kind=kind)
+    return retrieve_verified(
+        question,
+        session_id=session_id,
+        k=k,
+        kind=kind,
+        country=country,
+        year=year,
+        city=city,
+    )
 
 
 def build_messages(question: str, hits: list[dict]) -> list[dict]:

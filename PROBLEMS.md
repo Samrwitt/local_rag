@@ -18,7 +18,7 @@ OCR may return cafe names, street lines, and other text. That text is passed thr
 - country / city  
 - document roles (receipt, hotel, booking, memo, …)
 
-It is **not** “as-is” OCR sitting unused in the database. The searchable card carries the interpreted place and roles.
+Each attribute keeps method, confidence, evidence, and observed vs inferred flags in `enrichment_json`.
 
 ## 4. Photos and videos for trip queries
 
@@ -30,9 +30,15 @@ It is **not** “as-is” OCR sitting unused in the database. The searchable car
 
 ---
 
-# Practical obstacles
+# Practical obstacles (observed)
 
-- City lists are finite; unknown towns need list growth or a geocoder later.  
-- Underscores in names (`Italy_2019_rome.mp4`) are normalized to spaces for matching.  
-- Weak place words (conference cities, bare “note”) must not invent fake trips.  
-- Small generative models can invent dates; verified / local passages come first.  
+| Problem | Root cause | Selected fix | Remaining |
+|---|---|---|---|
+| Italy 2019 query has no true positives | Corpus has almost no Italy-tagged personal trip media | File-eval marks it as expected abstain; do not invent success | Need real trip files or a declared fixture set |
+| “hotel”/“receipt” false positives | Role regex matches medical guides / proposals | Travel co-evidence + citation filter in `place.py` | Still leaks on some PDFs; tighten further |
+| City lists are finite | Hand-maintained `CITY_COUNTRY` | Extend list; GPS country via polygons | Unknown towns need geocoder |
+| Photos without OCR/GPS hard to find by scene | Text-only MiniLM embeddings | Metadata cards + OCR when present | CLIP / visual embeddings not shipped |
+| Underscores in names | `Italy_2019_rome.mp4` | Normalize `_`/`-` to spaces in place matching | OK |
+| Small generative models invent dates | LLM optional last step | Verified / local passages first; LLM fail-open | Keep LLM off by default |
+| Duplicate near-copies | Same content different paths | Content sample hash + warning | Full-file hash optional for tiny files |
+| HEIC | Pillow lacks HEIF by default | pillow-heif or heif-convert/magick fallback | Depends on OS packages |

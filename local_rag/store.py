@@ -55,6 +55,14 @@ def connect() -> sqlite3.Connection:
             roles TEXT,
             vector BLOB
         );
+        CREATE TABLE IF NOT EXISTS relations (
+            path_a TEXT NOT NULL,
+            path_b TEXT NOT NULL,
+            score REAL,
+            reasons TEXT,
+            relation_type TEXT,
+            PRIMARY KEY (path_a, path_b)
+        );
         """
     )
     _ensure_columns(
@@ -65,6 +73,10 @@ def connect() -> sqlite3.Connection:
             "language": "TEXT",
             "roles": "TEXT",
             "place_source": "TEXT",
+            "content_hash": "TEXT",
+            "enrichment_json": "TEXT",
+            "device": "TEXT",
+            "duration": "REAL",
         },
     )
     _ensure_columns(conn, "chunks", {"city": "TEXT", "roles": "TEXT"})
@@ -94,8 +106,14 @@ def replace_file(record: dict, chunks: list[dict]) -> None:
         conn.execute("DELETE FROM chunks WHERE path = ?", (record["path"],))
         conn.execute(
             """
-            INSERT INTO files(path, name, kind, fingerprint, captured_at, time_source, country, city, language, roles, place_source, lat, lon, chars, ocr_used, warning, preview)
-            VALUES (:path, :name, :kind, :fingerprint, :captured_at, :time_source, :country, :city, :language, :roles, :place_source, :lat, :lon, :chars, :ocr_used, :warning, :preview)
+            INSERT INTO files(
+                path, name, kind, fingerprint, captured_at, time_source, country, city, language, roles,
+                place_source, lat, lon, chars, ocr_used, warning, preview, content_hash, enrichment_json, device, duration
+            )
+            VALUES (
+                :path, :name, :kind, :fingerprint, :captured_at, :time_source, :country, :city, :language, :roles,
+                :place_source, :lat, :lon, :chars, :ocr_used, :warning, :preview, :content_hash, :enrichment_json, :device, :duration
+            )
             ON CONFLICT(path) DO UPDATE SET
                 name=excluded.name,
                 kind=excluded.kind,
@@ -112,7 +130,11 @@ def replace_file(record: dict, chunks: list[dict]) -> None:
                 chars=excluded.chars,
                 ocr_used=excluded.ocr_used,
                 warning=excluded.warning,
-                preview=excluded.preview
+                preview=excluded.preview,
+                content_hash=excluded.content_hash,
+                enrichment_json=excluded.enrichment_json,
+                device=excluded.device,
+                duration=excluded.duration
             """,
             record,
         )
@@ -140,11 +162,56 @@ def list_files() -> list[dict]:
         rows = conn.execute(
             """
             SELECT path, name, kind, captured_at, time_source, country, city, language, roles,
-                   place_source, lat, lon, chars, ocr_used, warning, preview
+                   place_source, lat, lon, chars, ocr_used, warning, preview, content_hash,
+                   enrichment_json, device, duration
             FROM files ORDER BY name
             """
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def files_by_content_hash(content_hash: str) -> list[str]:
+    if not content_hash:
+        return []
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT path FROM files WHERE content_hash = ?",
+            (content_hash,),
+        ).fetchall()
+    return [row["path"] for row in rows]
+
+
+def replace_relations(rows: list[dict]) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM relations")
+        if rows:
+            conn.executemany(
+                """
+                INSERT INTO relations(path_a, path_b, score, reasons, relation_type)
+                VALUES (:path_a, :path_b, :score, :reasons, :relation_type)
+                """,
+                rows,
+            )
+
+
+def relations_for(path: str, limit: int = 8) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT path_a, path_b, score, reasons, relation_type
+            FROM relations
+            WHERE path_a = ? OR path_b = ?
+            ORDER BY score DESC
+            LIMIT ?
+            """,
+            (path, path, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def relation_count() -> int:
+    with connect() as conn:
+        return int(conn.execute("SELECT COUNT(*) FROM relations").fetchone()[0])
 
 
 STOPWORDS = {

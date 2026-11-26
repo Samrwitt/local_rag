@@ -26,11 +26,15 @@ from local_rag.geo import country_at
 from local_rag.place import interpret_place
 
 TEXT_EXT = {".txt", ".md", ".markdown", ".csv", ".json", ".html", ".htm", ".rst", ".log"}
-IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp", ".gif", ".heic", ".heif"}
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
 
 MAX_TEXT_CHARS = 200_000
 W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+P_NS = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+SS_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+R_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 
 
 @dataclass
@@ -50,6 +54,10 @@ class Extracted:
     warnings: list[str] = field(default_factory=list)
     ocr_used: bool = False
     interpreted: str = ""
+    enrichment: dict = field(default_factory=dict)
+    device: str | None = None
+    duration: float | None = None
+    content_hash: str | None = None
 
 
 def kind_for(path: Path) -> str | None:
@@ -60,6 +68,10 @@ def kind_for(path: Path) -> str | None:
         return "pdf"
     if ext == ".docx":
         return "docx"
+    if ext == ".pptx":
+        return "pptx"
+    if ext in {".xlsx", ".xlsm"}:
+        return "xlsx"
     if ext in IMAGE_EXT:
         return "image"
     if ext in VIDEO_EXT:
@@ -77,6 +89,10 @@ def extract(path: Path) -> Extracted:
         result = _extract_pdf(path)
     elif kind == "docx":
         result = _extract_docx(path)
+    elif kind == "pptx":
+        result = _extract_pptx(path)
+    elif kind == "xlsx":
+        result = _extract_xlsx(path)
     elif kind == "image":
         result = _extract_image(path)
     else:
@@ -98,6 +114,7 @@ def _apply_place(result: Extracted, name: str) -> Extracted:
     result.venues = place.venues
     result.place_source = place.place_source
     result.interpreted = "\n".join(place.summary_lines)
+    result.enrichment = place.enrichment if hasattr(place, "enrichment") else {}
     return result
 
 
@@ -148,7 +165,7 @@ def _extract_docx(path: Path) -> Extracted:
     try:
         with zipfile.ZipFile(path) as archive:
             xml = archive.read("word/document.xml")
-    except (zipfile.BadZipFile, KeyError) as exc:
+    except (zipfile.BadZipFile, KeyError, OSError) as exc:
         return Extracted(kind="docx", warnings=[f"could not read docx: {exc}"])
     root = ET.fromstring(xml)
     paragraphs = []
@@ -172,6 +189,94 @@ def _extract_docx(path: Path) -> Extracted:
         captured, source = _time_from_mtime(path)
     return Extracted(
         kind="docx",
+        text=text,
+        captured_at=captured,
+        time_source=source,
+        warnings=warnings,
+    )
+
+
+def _extract_pptx(path: Path) -> Extracted:
+    """Extract slide text from PPTX (OOXML) without external deps."""
+    warnings = []
+    slides: list[str] = []
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = sorted(
+                n for n in archive.namelist()
+                if n.startswith("ppt/slides/slide") and n.endswith(".xml")
+            )
+            for name in names[:80]:
+                root = ET.fromstring(archive.read(name))
+                parts = [node.text or "" for node in root.iter(f"{A_NS}t") if node.text]
+                line = " ".join(part.strip() for part in parts if part and part.strip())
+                if line:
+                    slides.append(f"Slide {len(slides) + 1}: {line}")
+    except (zipfile.BadZipFile, KeyError, OSError, ET.ParseError) as exc:
+        return Extracted(kind="pptx", warnings=[f"could not read pptx: {exc}"])
+    text = "\n\n".join(slides)[:MAX_TEXT_CHARS]
+    if not text:
+        warnings.append("pptx had no text")
+    captured, source = _date_from_text(text)
+    if captured is None:
+        captured, source = _time_from_mtime(path)
+    return Extracted(
+        kind="pptx",
+        text=text,
+        captured_at=captured,
+        time_source=source,
+        warnings=warnings,
+    )
+
+
+def _extract_xlsx(path: Path) -> Extracted:
+    """Extract cell text from XLSX via sharedStrings + sheet XML."""
+    warnings = []
+    try:
+        with zipfile.ZipFile(path) as archive:
+            shared: list[str] = []
+            if "xl/sharedStrings.xml" in archive.namelist():
+                root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                for si in root.iter(f"{SS_NS}si"):
+                    texts = [t.text or "" for t in si.iter(f"{SS_NS}t")]
+                    shared.append("".join(texts))
+            rows_out: list[str] = []
+            sheets = sorted(
+                n for n in archive.namelist()
+                if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")
+            )
+            for sheet_name in sheets[:10]:
+                root = ET.fromstring(archive.read(sheet_name))
+                for row in root.iter(f"{SS_NS}row"):
+                    cells = []
+                    for cell in row.iter(f"{SS_NS}c"):
+                        ref = cell.attrib.get("r", "")
+                        value_node = cell.find(f"{SS_NS}v")
+                        if value_node is None or value_node.text is None:
+                            continue
+                        raw = value_node.text
+                        if cell.attrib.get("t") == "s":
+                            try:
+                                raw = shared[int(raw)]
+                            except (ValueError, IndexError):
+                                pass
+                        cells.append(f"{ref}:{raw}" if ref else raw)
+                    if cells:
+                        rows_out.append(" | ".join(cells))
+                    if len(rows_out) >= 400:
+                        break
+                if len(rows_out) >= 400:
+                    break
+    except (zipfile.BadZipFile, KeyError, OSError, ET.ParseError) as exc:
+        return Extracted(kind="xlsx", warnings=[f"could not read xlsx: {exc}"])
+    text = "\n".join(rows_out)[:MAX_TEXT_CHARS]
+    if not text:
+        warnings.append("xlsx had no cells")
+    captured, source = _date_from_text(text)
+    if captured is None:
+        captured, source = _time_from_mtime(path)
+    return Extracted(
+        kind="xlsx",
         text=text,
         captured_at=captured,
         time_source=source,
@@ -306,12 +411,40 @@ def _pdf_page_count(path: Path) -> int | None:
     return None
 
 
+def _open_image(path: Path):
+    """Open common image formats; HEIC via pillow-heif or heif-convert fallback."""
+    ext = path.suffix.lower()
+    if ext in {".heic", ".heif"}:
+        try:
+            from pillow_heif import register_heif_opener  # type: ignore
+
+            register_heif_opener()
+            return Image.open(path), None
+        except Exception:
+            pass
+        with tempfile.TemporaryDirectory(prefix="localrag-heic-") as tmp:
+            out = Path(tmp) / "converted.jpg"
+            for cmd in (
+                ["heif-convert", str(path), str(out)],
+                ["magick", str(path), str(out)],
+            ):
+                try:
+                    proc = subprocess.run(cmd, capture_output=True, timeout=45, check=False)
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    continue
+                if out.exists() and out.stat().st_size > 0:
+                    return Image.open(out), f"heic converted via {cmd[0]}"
+            return None, "HEIC support unavailable (install pillow-heif or libheif tools)"
+    return Image.open(path), None
+
+
 def _extract_image(path: Path) -> Extracted:
     warnings = []
     lat = lon = None
     captured = source = None
+    device = None
     try:
-        lat, lon, captured, source = _image_exif(path)
+        lat, lon, captured, source, device = _image_exif(path)
     except Exception as exc:
         warnings.append(f"exif unreadable: {exc}")
     country = None
@@ -329,7 +462,32 @@ def _extract_image(path: Path) -> Extracted:
     if captured is None:
         captured, source = _time_from_mtime(path)
 
-    text, ocr_warning = _tesseract(path)
+    ocr_path = path
+    if path.suffix.lower() in {".heic", ".heif"}:
+        image, heic_note = _open_image(path)
+        if heic_note:
+            warnings.append(heic_note)
+        if image is None:
+            return Extracted(
+                kind="image",
+                captured_at=captured,
+                time_source=source,
+                country=country,
+                lat=lat,
+                lon=lon,
+                device=device,
+                warnings=warnings,
+            )
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            image.convert("RGB").save(tmp.name, format="JPEG", quality=90)
+            ocr_path = Path(tmp.name)
+        try:
+            text, ocr_warning = _tesseract(ocr_path)
+        finally:
+            ocr_path.unlink(missing_ok=True)
+    else:
+        text, ocr_warning = _tesseract(path)
+
     ocr_used = False
     kept = _usable_ocr(text) if text else None
     if ocr_warning:
@@ -348,16 +506,19 @@ def _extract_image(path: Path) -> Extracted:
         country=country,
         lat=lat,
         lon=lon,
+        device=device,
         warnings=warnings,
         ocr_used=ocr_used,
     )
 
 
-def _image_exif(path: Path) -> tuple[float | None, float | None, str | None, str | None]:
-    image = Image.open(path)
+def _image_exif(path: Path) -> tuple[float | None, float | None, str | None, str | None, str | None]:
+    image, note = _open_image(path)
+    if image is None:
+        raise RuntimeError(note or "unreadable image")
     exif = image.getexif()
     if not exif:
-        return None, None, None, None
+        return None, None, None, None, None
     captured = None
     source = None
     sub = exif.get_ifd(34665) if hasattr(exif, "get_ifd") else {}
@@ -378,7 +539,16 @@ def _image_exif(path: Path) -> tuple[float | None, float | None, str | None, str
         parsed = _gps_datetime(gps)
         if parsed:
             captured, source = parsed, "gps"
-    return lat, lon, captured, source
+    make = exif.get(271)
+    model = exif.get(272)
+    device_parts = []
+    for part in (make, model):
+        if isinstance(part, bytes):
+            part = part.decode("utf-8", "ignore")
+        if part:
+            device_parts.append(str(part).strip())
+    device = " ".join(device_parts) or None
+    return lat, lon, captured, source, device
 
 
 def _gps_lat_lon(gps: dict) -> tuple[float | None, float | None]:
@@ -506,6 +676,8 @@ def _extract_video(path: Path) -> Extracted:
         country=country,
         lat=lat,
         lon=lon,
+        duration=meta.get("duration"),
+        device=meta.get("encoder") or meta.get("artist"),
         warnings=warnings,
         ocr_used=False,
     )
@@ -520,7 +692,7 @@ def _ffprobe(path: Path) -> dict:
                 "error",
                 "-show_entries",
                 "format=duration,format_name:format_tags="
-                "creation_time,title,comment,description,location,artist,album,com.apple.quicktime.location.ISO6709",
+                "creation_time,title,comment,description,location,artist,album,encoder,com.apple.quicktime.location.ISO6709",
                 "-of",
                 "json",
                 str(path),
@@ -568,6 +740,7 @@ def _ffprobe(path: Path) -> dict:
         "location": location,
         "artist": tags.get("artist"),
         "album": tags.get("album"),
+        "encoder": tags.get("encoder"),
         "lat": lat,
         "lon": lon,
     }

@@ -13,14 +13,28 @@ Stages:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
 
+
+def re_search_generic_media(normalized: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(my|all|show|list|find)?\s*(videos?|photos?|pictures?|images?|documents?|files?|pdfs?)\b",
+            normalized or "",
+            re.I,
+        )
+    )
+
 from local_rag import confidence, conversation, kb, store
+from local_rag.explain import attach_explanations
 from local_rag.hybrid import attach_meta, reciprocal_rank_fusion
 from local_rag.lexical import BM25Index, LexDoc
+from local_rag.place import parse_trip_query
 from local_rag.preprocess import prepare_query
+from local_rag.relations import expand_with_relations
 from local_rag.rerank import rerank
 from local_rag.settings import (
     MIN_CONFIDENCE,
@@ -30,7 +44,12 @@ from local_rag.settings import (
 )
 
 
-def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, float]], list[tuple[str, float]], list[tuple[str, float]], dict[str, dict]]:
+def _doc_candidates(
+    question: str,
+    prepared,
+    k: int,
+    trip_hints: dict | None = None,
+) -> tuple[list[tuple[str, float]], list[tuple[str, float]], list[tuple[str, float]], dict[str, dict]]:
     """Dense + lexical + legacy hybrid over indexed document chunks."""
     from local_rag.embedder import embed_query
 
@@ -38,6 +57,7 @@ def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, fl
     dense_ranking: list[tuple[str, float]] = []
     lexical_ranking: list[tuple[str, float]] = []
     legacy_ranking: list[tuple[str, float]] = []
+    hints = trip_hints or {}
 
     with store.connect() as conn:
         rows = conn.execute(
@@ -47,16 +67,22 @@ def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, fl
         return dense_ranking, lexical_ranking, legacy_ranking, meta_by_id
 
     qvec = embed_query(prepared.normalized or question).astype(np.float32)
+    query_terms = {
+        t for t in re.findall(r"[a-z0-9]{3,}", (prepared.normalized or question).lower())
+        if t not in {"the", "and", "for", "with", "from", "that", "this", "have", "what", "when", "where", "your", "you"}
+    }
     dense_scored = []
+    name_scored = []
     lex_docs = []
     for row in rows:
         doc_id = f"doc:{row['id']}"
         text = row["text"] or ""
+        name = Path(row["path"]).name
         meta = {
             "id": doc_id,
             "source_type": "document",
             "path": row["path"],
-            "name": Path(row["path"]).name,
+            "name": name,
             "ordinal": row["ordinal"],
             "text": text,
             "question": text[:240],
@@ -72,15 +98,32 @@ def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, fl
         }
         meta_by_id[doc_id] = meta
         blob = row["vector"]
+        name_terms = set(re.findall(r"[a-z0-9]{3,}", name.lower().replace("_", " ").replace("-", " ")))
+        name_overlap = (len(query_terms & name_terms) / len(query_terms)) if query_terms else 0.0
         if blob:
             vec = np.frombuffer(blob, dtype=np.float32)
             cos = float(vec @ qvec)
-            dense_scored.append((doc_id, cos))
+            # Soft metadata boosts for trip-style filters + filename overlap.
+            boost = 0.0
+            if hints.get("country") and (row["country"] or "").lower() == str(hints["country"]).lower():
+                boost += 0.04
+            if hints.get("year") and (row["captured_at"] or "").startswith(str(hints["year"])):
+                boost += 0.03
+            if hints.get("city") and (row["city"] or "").lower() == str(hints["city"]).lower():
+                boost += 0.03
+            if name_overlap >= 0.4:
+                boost += 0.08 * name_overlap
+            dense_scored.append((doc_id, cos + boost))
             meta["dense_score"] = cos
-        lex_docs.append(LexDoc(doc_id=doc_id, text=text, meta=meta))
+            meta["name_overlap"] = name_overlap
+        if name_overlap >= 0.5 and row["ordinal"] == 0:
+            name_scored.append((doc_id, name_overlap))
+            meta["legacy_score"] = max(float(meta.get("legacy_score") or 0.0), 0.55 + 0.4 * name_overlap)
+        lex_docs.append(LexDoc(doc_id=doc_id, text=f"{name}\n{text}", meta=meta))
 
     dense_scored.sort(key=lambda item: item[1], reverse=True)
     dense_ranking = dense_scored[:k]
+    name_scored.sort(key=lambda item: item[1], reverse=True)
 
     bm25 = BM25Index()
     bm25.build(lex_docs)
@@ -91,7 +134,15 @@ def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, fl
             meta_by_id[doc_id]["bm25_score"] = score
 
     # Legacy hybrid ranker (filename + rare terms) as an extra RRF list.
-    legacy_hits = store.search(question, qvec, k=k)
+    legacy_hits = store.search(
+        question,
+        qvec,
+        k=k,
+        trip_hints=hints or None,
+        country=hints.get("country"),
+        year=hints.get("year"),
+        city=hints.get("city"),
+    )
     path_to_ids: dict[str, list[str]] = {}
     for doc_id, meta in meta_by_id.items():
         path_to_ids.setdefault(meta["path"], []).append(doc_id)
@@ -99,6 +150,10 @@ def _doc_candidates(question: str, prepared, k: int) -> tuple[list[tuple[str, fl
         for doc_id in path_to_ids.get(hit["path"], [])[:1]:
             legacy_ranking.append((doc_id, float(hit["score"])))
             meta_by_id[doc_id]["legacy_score"] = float(hit["score"])
+    # Filename overlap list fills gaps when dense/legacy under-rank exact name matches.
+    for doc_id, score in name_scored[:k]:
+        if not any(doc_id == item[0] for item in legacy_ranking):
+            legacy_ranking.append((doc_id, float(score)))
 
     return dense_ranking, lexical_ranking, legacy_ranking, meta_by_id
 
@@ -147,6 +202,48 @@ def _kb_candidates(prepared, k: int) -> tuple[list[tuple[str, float]], list[tupl
     return dense_ranking, lexical_ranking, meta_by_id
 
 
+def _diversify_by_file(hits: list[dict], k: int) -> list[dict]:
+    """Prefer one strong chunk per file so trip queries surface mixed media."""
+    primary: list[dict] = []
+    seen = set()
+    rest: list[dict] = []
+    for hit in hits:
+        path = hit.get("path") or hit.get("entry_id") or hit.get("id")
+        if path and path not in seen:
+            primary.append(hit)
+            seen.add(path)
+        else:
+            rest.append(hit)
+        if len(primary) >= k:
+            break
+    if len(primary) < k:
+        primary.extend(rest[: k - len(primary)])
+    return primary
+
+
+def _template_file_answer(question: str, hits: list[dict], language: str) -> str:
+    if not hits:
+        return (
+            "I cannot tell from the verified knowledge base or indexed files."
+            if language != "am"
+            else "ከተረጋገጠው እውቀት ወይም ከተመዘገቡ ፋይሎች መመለስ አልቻልኩም።"
+        )
+    hints = parse_trip_query(question)
+    lines = ["Here’s what matches your files:"]
+    if hints.get("country") or hints.get("year") or hints.get("city"):
+        bits = [b for b in (hints.get("city"), hints.get("country"), hints.get("year")) if b]
+        lines.append("Looking for: " + ", ".join(str(b) for b in bits) + ".")
+    for i, hit in enumerate(hits[:5], start=1):
+        name = hit.get("name") or (hit.get("path") or "").split("/")[-1] or hit.get("entry_id") or f"Result {i}"
+        place = ", ".join(p for p in (hit.get("city"), hit.get("country")) if p) or "place unknown"
+        when = (hit.get("captured_at") or "")[:10] or "date unknown"
+        why = "; ".join((hit.get("match_reasons") or [])[:3])
+        lines.append(f"{i}. {name} — {place}; {when}. {why}")
+    if language == "am":
+        lines[0] = "ከፋይሎችዎ የተገኘው:"
+    return "\n".join(lines)
+
+
 def retrieve_verified(
     question: str,
     *,
@@ -154,11 +251,28 @@ def retrieve_verified(
     k: int = 5,
     prefer_kb: bool = True,
     kind: str | None = None,
+    country: str | None = None,
+    year: str | None = None,
+    city: str | None = None,
 ) -> dict:
     session = conversation.get_or_create(session_id)
     resolved = conversation.resolve_followup(question, session)
     prepared = prepare_query(resolved["resolved_question"], intent_hints=[resolved["intent"]] if resolved.get("intent") else None)
     kind_filter = kind if kind and kind != "any" else None
+    # Infer media type from wording when the UI filter is still "All types".
+    if not kind_filter:
+        norm = (resolved.get("resolved_question") or question or "").lower()
+        if re.search(r"\b(videos?|clips?|footage|mp4|mov|mkv)\b", norm):
+            kind_filter = "video"
+        elif re.search(r"\b(photos?|pictures?|images?|jpegs?|pngs?)\b", norm):
+            kind_filter = "image"
+    trip_hints = parse_trip_query(resolved["resolved_question"])
+    if country:
+        trip_hints["country"] = country
+    if year:
+        trip_hints["year"] = str(year)
+    if city:
+        trip_hints["city"] = city
 
     stages = {
         "preprocess": {
@@ -167,13 +281,14 @@ def retrieve_verified(
             "tokens": prepared.tokens,
             "expanded_terms": prepared.expanded_terms,
             "kind_filter": kind_filter,
+            "trip_hints": trip_hints,
         },
         "conversation": resolved,
     }
 
     kb_dense, kb_lex, kb_meta = _kb_candidates(prepared, RETRIEVE_CANDIDATES)
     doc_dense, doc_lex, doc_legacy, doc_meta = _doc_candidates(
-        resolved["resolved_question"], prepared, RETRIEVE_CANDIDATES
+        resolved["resolved_question"], prepared, RETRIEVE_CANDIDATES, trip_hints=trip_hints
     )
     if kind_filter:
         # Restrict document pool to the requested media type (e.g. image).
@@ -190,13 +305,15 @@ def retrieve_verified(
     meta_by_id.update(doc_meta)
     meta_by_id.update(kb_meta)  # KB wins on id collision (none expected)
 
-    fileish = bool(kind_filter) or any(
+    fileish = bool(kind_filter) or bool(trip_hints.get("trip") or trip_hints.get("country") or trip_hints.get("year")) or any(
         term in prepared.normalized
         for term in (
             "file", "document", "pdf", "photo", "photos", "picture", "pictures",
             "image", "images", "png", "jpg", "jpeg", "screenshot",
             "video", "invoice", "receipt", "indexed", "wrote", "write",
-            "my notes", "folder", "tour", "ፋይል", "ሰነድ", "ፎቶ", "ምስል",
+            "my notes", "folder", "tour", "trip", "travel", "vacation", "hotel",
+            "booking", "samrawit", "essay", "cv", "resume", "statement",
+            "purpose", "sop", "letter", "ፋይል", "ሰነድ", "ፎቶ", "ምስል",
         )
     )
 
@@ -240,8 +357,28 @@ def retrieve_verified(
         top_k=max(RERANK_TOP_K, k),
     )
 
+    # Share the best dense/legacy signal across chunks of the same file so a
+    # strong filename hit is not lost when a different ordinal wins dense RRF.
+    by_path: dict[str, list[dict]] = {}
+    for cand in reranked:
+        path = cand.get("path")
+        if path:
+            by_path.setdefault(path, []).append(cand)
+    for group in by_path.values():
+        max_legacy = max((float(c.get("legacy_score") or 0.0) for c in group), default=0.0)
+        max_dense = max((float(c.get("dense_score") or 0.0) for c in group), default=0.0)
+        for cand in group:
+            if max_legacy:
+                cand["legacy_score"] = max(float(cand.get("legacy_score") or 0.0), max_legacy)
+            if max_dense:
+                cand["dense_score"] = max(float(cand.get("dense_score") or 0.0), max_dense)
+
+    generic_media_early = bool(kind_filter and re_search_generic_media(prepared.normalized))
     for cand in reranked:
         cand["confidence"] = confidence.score_candidate(cand, prepared.language)
+        if kind_filter and cand.get("kind") == kind_filter:
+            bump = 0.12 if generic_media_early else 0.08
+            cand["confidence"] = min(1.0, max(float(cand["confidence"]), 0.45 if generic_media_early else 0.0) + bump)
 
     # Emergency curated answers jump the queue.
     if confidence.detect_emergency(question):
@@ -265,12 +402,28 @@ def retrieve_verified(
     kb_best = kb_hits[0] if kb_hits else None
     doc_best = doc_hits[0] if doc_hits else None
 
+    file_floor = 0.36 if kind_filter else 0.42
+    generic_media = bool(
+        kind_filter
+        and re_search_generic_media(prepared.normalized)
+    )
+    doc_conf = float(doc_best.get("confidence") or 0) if doc_best else 0.0
+    kb_conf = float(kb_best.get("confidence") or 0) if kb_best else 0.0
     if fileish:
-        if doc_best and (doc_best.get("confidence") or 0) >= 0.48:
+        if doc_best and doc_conf >= file_floor:
+            selected_pool = doc_hits
+        elif doc_best and (doc_best.get("dense_score") or 0) >= (0.42 if kind_filter else 0.55):
+            # Strong semantic hit even if BM25/legacy did not land on same chunk.
+            selected_pool = doc_hits
+        elif generic_media and doc_hits:
+            # "my videos" / "my photos" with a type filter: list matching files.
             selected_pool = doc_hits
         else:
             selected_pool = []
-    elif kb_best and (kb_best.get("confidence") or 0) >= MIN_CONFIDENCE:
+    elif doc_best and doc_conf >= max(file_floor, kb_conf + 0.05) and doc_conf >= MIN_CONFIDENCE:
+        # Personal-file hit clearly beats curated KB.
+        selected_pool = doc_hits
+    elif kb_best and kb_conf >= MIN_CONFIDENCE:
         selected_pool = kb_hits
     else:
         selected_pool = []
@@ -292,10 +445,22 @@ def retrieve_verified(
     }
 
     answer = None
-    sources = (selected_pool or ranked)[:k]
-    if validation.ok and selected_pool:
-        best = selected_pool[0]
-        answer = confidence.pick_answer_text(best, prepared.language)
+    pool = selected_pool if (validation.ok and selected_pool) else []
+    if fileish and pool:
+        pool = _diversify_by_file(pool, max(k, 8))
+    sources = pool[:k] if pool else []
+    sources = attach_explanations(resolved["resolved_question"], sources)
+    if fileish and sources:
+        sources = expand_with_relations(sources, limit_extra=3)
+        sources = attach_explanations(resolved["resolved_question"], sources)
+        sources = _diversify_by_file(sources, max(k + 3, k))
+
+    if validation.ok and pool:
+        best = pool[0]
+        if fileish or best.get("source_type") == "document":
+            answer = _template_file_answer(resolved["resolved_question"], sources, prepared.language)
+        else:
+            answer = confidence.pick_answer_text(best, prepared.language)
         conversation.remember(
             session,
             intent=best.get("intent") or resolved.get("intent"),
@@ -333,6 +498,7 @@ def retrieve_verified(
         "session_id": session.session_id,
         "language": prepared.language,
         "intent": resolved.get("intent"),
+        "trip_hints": trip_hints,
         "answer": answer,
         "abstained": validation.abstain or not validation.ok,
         "confidence": validation.confidence,
